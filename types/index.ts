@@ -1,3 +1,4 @@
+// types/index.ts
 import type { Timestamp } from "firebase/firestore"
 
 export type UserRole = "super_admin" | "admin" | "group_admin" | "student"
@@ -15,8 +16,15 @@ export interface User {
   totalAnnouncementsViewed: number
   createdAt: Timestamp | Date
   updatedAt: Timestamp | Date
+  // Add notification preferences
+  notificationPreferences?: {
+    emailNotifications: boolean
+    announcementEmails: boolean
+    groupActivityEmails: boolean
+  }
 }
 
+// Rest of your interfaces remain the same...
 export interface Group {
   id: string
   name: string
@@ -62,3 +70,6 @@ export interface AuthContextType {
   signOut: () => Promise<void>
   updateProfile: (data: Partial<User>) => Promise<void>
 }
+
+
+

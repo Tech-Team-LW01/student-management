@@ -1,7 +1,10 @@
+
+
 "use client"
 
 import type React from "react"
 import { createContext, useState, useEffect, useContext } from "react"
+import { useRouter } from "next/navigation"
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -14,27 +17,38 @@ import { doc, setDoc, getDoc } from "firebase/firestore"
 import type { User } from "@/types"
 import { getPlatformSettings } from "@/lib/firebase-utils"
 
-export interface AuthContextProps {
+// Default super admin credentials
+const DEFAULT_SUPER_ADMIN = {
+  email: "linuxworld@gmail.com",
+  password: "123456789",
+  userData: {
+    id: "default-super-admin",
+    email: "test1bhupesh@gmail.com",
+    name: "Linux World Admin",
+    role: "super_admin" as const,
+    profileImage: "",
+    mobileNumber: "",
+    registrationDate: new Date(),
+    isApproved: true,
+    assignedGroups: [],
+    totalAnnouncementsViewed: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
+}
+
+interface AuthContextProps {
   user: User | null
   signUp: (userData: Partial<User>, password: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
-  signOut: () => void
+  signOutUser: () => Promise<void>
   updateUser: (userData: Partial<User>) => Promise<void>
   authLoading: boolean
   error: string | null
-  isInitialized: boolean // Add this to track if auth has been initialized
+  isInitialized: boolean
 }
 
-const AuthContext = createContext<AuthContextProps>({
-  user: null,
-  signUp: async () => {},
-  signIn: async () => {},
-  signOut: () => {},
-  updateUser: async () => {},
-  authLoading: false,
-  error: null,
-  isInitialized: false,
-})
+const AuthContext = createContext<AuthContextProps | undefined>(undefined)
 
 export const useAuth = () => {
   const context = useContext(AuthContext)
@@ -45,14 +59,33 @@ export const useAuth = () => {
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [authLoading, setAuthLoading] = useState(false)
-  const [isInitialized, setIsInitialized] = useState(false) // Track initialization
+  const [isInitialized, setIsInitialized] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let mounted = true // Prevent state updates if component unmounted
+    let mounted = true
 
+    // Check if there's a default super admin session in localStorage
+    const checkDefaultAdmin = () => {
+      const storedAdmin = localStorage.getItem('defaultSuperAdmin')
+      if (storedAdmin === 'true') {
+        setUser(DEFAULT_SUPER_ADMIN.userData)
+        setIsInitialized(true)
+        setAuthLoading(false)
+        return true
+      }
+      return false
+    }
+
+    // First check for default admin
+    if (checkDefaultAdmin()) {
+      return
+    }
+
+    // Then check Firebase auth
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!mounted) return
 
@@ -69,7 +102,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               console.log("User data loaded from Firestore:", userData)
             }
           } else {
-            // Handle the case where the user exists in Firebase Auth but not in Firestore
             console.warn("User data not found in Firestore. Signing out.")
             await signOut(auth)
             if (mounted) {
@@ -106,6 +138,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setAuthLoading(true)
       setError(null)
+
+      // Prevent signup with default admin email
+      if (userData.email?.toLowerCase() === DEFAULT_SUPER_ADMIN.email.toLowerCase()) {
+        throw new Error("This email is reserved for system use")
+      }
 
       // Get platform settings to check auto-approval
       const platformSettings = await getPlatformSettings()
@@ -153,7 +190,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAuthLoading(true)
       setError(null)
       
-      console.log("Attempting to sign in...")
+      // Check if it's the default super admin login
+      if (
+        email.toLowerCase() === DEFAULT_SUPER_ADMIN.email.toLowerCase() && 
+        password === DEFAULT_SUPER_ADMIN.password
+      ) {
+        console.log("Default super admin login detected")
+        
+        // Set the default super admin user
+        setUser(DEFAULT_SUPER_ADMIN.userData)
+        
+        // Store in localStorage to persist the session
+        localStorage.setItem('defaultSuperAdmin', 'true')
+        
+        console.log("Default super admin login successful")
+        return
+      }
+      
+      // Proceed with normal Firebase authentication
+      console.log("Attempting Firebase sign in...")
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       const firebaseUser = userCredential.user
 
@@ -184,12 +239,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAuthLoading(true)
       setError(null)
       console.log("Signing out...")
-      await signOut(auth)
+      
+      // Clear default admin session if exists
+      localStorage.removeItem('defaultSuperAdmin')
+      
+      // Sign out from Firebase if there's an active session
+      if (auth.currentUser) {
+        await signOut(auth)
+      }
+      
       setUser(null)
       console.log("Sign out successful")
+      
+      // Redirect to signin page
+      router.push('/auth/signin')
     } catch (error: any) {
       console.error("Sign out error:", error)
       setError(error.message)
+      // Even if there's an error, try to redirect
+      router.push('/auth/signin')
     } finally {
       setAuthLoading(false)
     }
@@ -200,6 +268,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAuthLoading(true)
       setError(null)
 
+      // Handle default super admin update
+      if (user?.id === DEFAULT_SUPER_ADMIN.userData.id) {
+        // For default admin, just update the local state
+        setUser((prevUser) => {
+          if (prevUser) {
+            const updatedUser = { ...prevUser, ...userData, updatedAt: new Date() }
+            // Optionally store some settings in localStorage
+            if (userData.name || userData.profileImage) {
+              localStorage.setItem('defaultAdminProfile', JSON.stringify({
+                name: updatedUser.name,
+                profileImage: updatedUser.profileImage
+              }))
+            }
+            return updatedUser
+          }
+          return prevUser
+        })
+        return
+      }
+
+      // Normal Firebase user update
       if (auth.currentUser) {
         if (userData.name) {
           await updateProfile(auth.currentUser, {
@@ -234,7 +323,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     signUp,
     signIn,
-    signOut: signOutUser,
+    signOutUser,
     updateUser,
     authLoading,
     error,

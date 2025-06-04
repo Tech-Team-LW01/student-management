@@ -1,12 +1,19 @@
 "use client"
 
 import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation" // Add this
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { BookOpen, Clock, Mail } from "lucide-react"
 
 export default function PendingApprovalPage() {
-  const { signOut } = useAuth()
+  const { signOutUser } = useAuth()
+  const router = useRouter() // Add this
+
+  const handleSignOut = async () => {
+    await signOutUser()
+    router.push('/auth/signin')
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
@@ -47,7 +54,11 @@ export default function PendingApprovalPage() {
             </div>
           </div>
 
-          <Button onClick={signOut} variant="outline" className="w-full">
+          <Button 
+            onClick={handleSignOut} 
+            variant="outline" 
+            className="w-full"
+          >
             Sign Out
           </Button>
         </CardContent>

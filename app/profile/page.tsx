@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { ProtectedRoute } from "@/components/protected-route"
@@ -16,7 +15,7 @@ import { uploadFile } from "@/lib/firebase-utils"
 import { Upload, Save } from "lucide-react"
 
 export default function ProfilePage() {
-  const { user, updateProfile } = useAuth()
+  const { user, updateUser } = useAuth() // Changed from updateProfile to updateUser
   const [formData, setFormData] = useState({
     name: user?.name || "",
     mobileNumber: user?.mobileNumber || "",
@@ -32,9 +31,14 @@ export default function ProfilePage() {
 
     try {
       setLoading(true)
+      setError("") // Clear any previous errors
       const imagePath = `profiles/${user.id}/${Date.now()}-${file.name}`
       const imageUrl = await uploadFile(file, imagePath)
       setFormData((prev) => ({ ...prev, profileImage: imageUrl }))
+      setSuccess("Image uploaded successfully!")
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(""), 3000)
     } catch (error) {
       console.error("Error uploading image:", error)
       setError("Failed to upload image")
@@ -52,14 +56,39 @@ export default function ProfilePage() {
     setSuccess("")
 
     try {
-      await updateProfile(formData)
+      await updateUser(formData) // Changed from updateProfile to updateUser
       setSuccess("Profile updated successfully!")
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(""), 3000)
     } catch (error) {
       console.error("Error updating profile:", error)
       setError("Failed to update profile")
     } finally {
       setLoading(false)
     }
+  }
+
+  // Helper function to format date
+  const formatDate = (date: any) => {
+    if (!date) return "Unknown"
+    
+    // Handle Firestore Timestamp
+    if (date?.toDate && typeof date.toDate === 'function') {
+      return date.toDate().toLocaleDateString()
+    }
+    
+    // Handle Date object
+    if (date instanceof Date) {
+      return date.toLocaleDateString()
+    }
+    
+    // Handle string date
+    if (typeof date === 'string') {
+      return new Date(date).toLocaleDateString()
+    }
+    
+    return "Unknown"
   }
 
   return (
@@ -85,8 +114,8 @@ export default function ProfilePage() {
                 )}
 
                 {success && (
-                  <Alert>
-                    <AlertDescription>{success}</AlertDescription>
+                  <Alert className="bg-green-50 border-green-200">
+                    <AlertDescription className="text-green-800">{success}</AlertDescription>
                   </Alert>
                 )}
 
@@ -98,9 +127,19 @@ export default function ProfilePage() {
                         {formData.name ? formData.name.charAt(0).toUpperCase() : "U"}
                       </AvatarFallback>
                     </Avatar>
-                    <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full cursor-pointer hover:bg-blue-700">
+                    <label 
+                      className={`absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full cursor-pointer hover:bg-blue-700 ${
+                        loading ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
                       <Upload className="h-4 w-4" />
-                      <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleImageUpload} 
+                        className="hidden" 
+                        disabled={loading}
+                      />
                     </label>
                   </div>
                 </div>
@@ -113,6 +152,7 @@ export default function ProfilePage() {
                       value={formData.name}
                       onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                       placeholder="Enter your full name"
+                      required
                     />
                   </div>
 
@@ -151,25 +191,31 @@ export default function ProfilePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium">Role</Label>
-                  <p className="text-sm text-muted-foreground capitalize">{user?.role?.replace("_", " ")}</p>
+                  <p className="text-sm text-muted-foreground capitalize">
+                    {user?.role?.replace(/_/g, " ") || "N/A"}
+                  </p>
                 </div>
 
                 <div>
                   <Label className="text-sm font-medium">Registration Date</Label>
                   <p className="text-sm text-muted-foreground">
-                    {user?.registrationDate instanceof Date ? user.registrationDate.toLocaleDateString() : "Unknown"}
+                    {formatDate(user?.registrationDate)}
                   </p>
                 </div>
 
                 <div>
                   <Label className="text-sm font-medium">Account Status</Label>
-                  <p className="text-sm text-muted-foreground">{user?.isApproved ? "Approved" : "Pending Approval"}</p>
+                  <p className={`text-sm ${user?.isApproved ? 'text-green-600' : 'text-yellow-600'}`}>
+                    {user?.isApproved ? "✓ Approved" : "⏳ Pending Approval"}
+                  </p>
                 </div>
 
                 {user?.role === "student" && (
                   <div>
                     <Label className="text-sm font-medium">Assigned Groups</Label>
-                    <p className="text-sm text-muted-foreground">{user?.assignedGroups?.length || 0} groups</p>
+                    <p className="text-sm text-muted-foreground">
+                      {user?.assignedGroups?.length || 0} group{(user?.assignedGroups?.length || 0) !== 1 ? 's' : ''}
+                    </p>
                   </div>
                 )}
               </div>
