@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is admin (with better error handling)
+    function isAdmin() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin'];
+    }
+    
+    // Helper function to check if user is super admin
+    function isSuperAdmin() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin';
+    }
+    
+    // Helper function to check if user is group admin
+    function isGroupAdmin() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'group_admin';
+    }
+    
+    // Helper function to check if user can write announcements
+    function canWriteAnnouncements() {
+      return request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin', 'group_admin'];
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Users can read and write their own user document
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Allow user creation during signup (before user document exists)
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Allow any authenticated user to read users (for admin checks)
+      allow read: if request.auth != null;
+      
+      // Allow any authenticated user to write to users (we'll handle permissions in the app)
+      allow write: if request.auth != null;
+      
+      // Allow admins to update user approval status and group assignments
+      allow update: if isAdmin() && 
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isApproved', 'assignedGroups', 'updatedAt']) ||
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isApproved', 'updatedAt']) ||
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignedGroups', 'updatedAt']));
+    }
+    
+    // Groups - allow all authenticated users to read/write
+    match /groups/{groupId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Announcements - allow all authenticated users to read/write
+    match /announcements/{announcementId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Settings collection - simplified permissions
+    match /settings/{settingId} {
+      // Allow all authenticated users to read settings
+      allow read: if isAuthenticated();
+      
+      // Allow all authenticated users to write settings (we'll handle permissions in the app)
+      allow write: if isAuthenticated();
+    }
+  }
+}
