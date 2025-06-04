@@ -702,7 +702,7 @@ export default function DashboardPage() {
       <MainLayout>
         <div className="space-y-6">
           {/* Welcome Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg p-6">
+          <div className="bg-gradient-to-r from-[#520000] via-[#710000] via-[#a50000] to-[#ce0000] text-white rounded-lg p-6">
             <h1 className="text-3xl font-bold mb-2">Welcome to LinuxWorld, {user?.name}!</h1>
             <p className="text-blue-100">Stay updated with the latest announcements and course materials.</p>
           </div>
