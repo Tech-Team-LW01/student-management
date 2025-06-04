@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { BookOpen } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 
 export default function SignInPage() {
   const [email, setEmail] = useState("")
@@ -37,7 +38,12 @@ export default function SignInPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <BookOpen className="h-12 w-12 text-blue-600" />
+           <Image
+        src="/assets/LW@4x1.png" // Update this to the correct path for your logo
+        alt="LinuxWorld Logo"
+        width={42}
+        height={48}
+      />
           </div>
           <CardTitle className="text-2xl">Welcome to LinuxWorld</CardTitle>
           <CardDescription>Sign in to your LinuxWorld classroom account</CardDescription>
