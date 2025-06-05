@@ -4,13 +4,15 @@ import { getFirestore } from "firebase/firestore"
 import { getStorage } from "firebase/storage"
 
 const firebaseConfig = {
-apiKey: "AIzaSyAe4NsIfpJBYmdAXc1AQkbTsQRM4Wi4boE",
+
+  apiKey: "AIzaSyAe4NsIfpJBYmdAXc1AQkbTsQRM4Wi4boE",
   authDomain: "lw-students-management.firebaseapp.com",
   projectId: "lw-students-management",
   storageBucket: "lw-students-management.firebasestorage.app",
   messagingSenderId: "53560055195",
   appId: "1:53560055195:web:38087c947c8126d47e3d3e",
   measurementId: "G-NSPEN834JG"
+
 }
 
 // Validate Firebase config
