@@ -1,19 +1,8 @@
 // app/api/send-otp/route.ts
 import { NextResponse } from 'next/server';
 import { sendOTPEmail } from '@/lib/email-service';
-
-// Rate limiting store (in production, use Redis or similar)
-const otpAttempts = new Map<string, { count: number; timestamp: number }>();
-
-// Clean up old entries every hour
-setInterval(() => {
-  const now = Date.now();
-  for (const [email, data] of otpAttempts.entries()) {
-    if (now - data.timestamp > 3600000) { // 1 hour
-      otpAttempts.delete(email);
-    }
-  }
-}, 3600000);
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export async function POST(request: Request) {
   try {
@@ -36,29 +25,30 @@ export async function POST(request: Request) {
       );
     }
 
-    // Rate limiting - max 5 OTP requests per hour per email
-    const now = Date.now();
-    const userAttempts = otpAttempts.get(email);
+    // Check rate limiting using Firestore
+    const oneHourAgo = new Date(Date.now() - 3600000); // 1 hour ago
+    const otpAttemptsQuery = query(
+      collection(db, 'otpAttempts'),
+      where('email', '==', email),
+      where('timestamp', '>', oneHourAgo)
+    );
     
-    if (userAttempts) {
-      const hourAgo = now - 3600000; // 1 hour in milliseconds
-      
-      if (userAttempts.timestamp > hourAgo && userAttempts.count >= 5) {
-        return NextResponse.json(
-          { error: 'Too many attempts. Please try again later.' },
-          { status: 429 }
-        );
-      }
-      
-      if (userAttempts.timestamp > hourAgo) {
-        userAttempts.count += 1;
-      } else {
-        // Reset if last attempt was more than an hour ago
-        otpAttempts.set(email, { count: 1, timestamp: now });
-      }
-    } else {
-      otpAttempts.set(email, { count: 1, timestamp: now });
+    const attemptsSnapshot = await getDocs(otpAttemptsQuery);
+    const attemptsCount = attemptsSnapshot.size;
+
+    if (attemptsCount >= 5) {
+      return NextResponse.json(
+        { error: 'Too many attempts. Please try again later.' },
+        { status: 429 }
+      );
     }
+
+    // Record this attempt
+    await addDoc(collection(db, 'otpAttempts'), {
+      email,
+      timestamp: serverTimestamp(),
+      otp,
+    });
 
     // Send the email
     const result = await sendOTPEmail(email, otp, name);
