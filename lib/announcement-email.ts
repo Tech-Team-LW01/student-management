@@ -529,7 +529,8 @@ ${announcement.files.map(file => `
   `
 
   try {
-    const response = await fetch('/api/send-email', {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const response = await fetch(`${baseUrl}/api/send-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
