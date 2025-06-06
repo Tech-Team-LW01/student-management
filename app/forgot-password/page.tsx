@@ -32,13 +32,20 @@ export default function ForgotPasswordPage() {
         return
       }
 
-      // If email exists, send password reset email
-      const actionCodeSettings = {
-        url: `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`,
-        handleCodeInApp: true,
+      // If email exists, send password reset email through API
+      const response = await fetch('/api/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to send reset email')
       }
 
-      await sendPasswordResetEmail(auth, email, actionCodeSettings)
       setMessage("Password reset link has been sent to your email.")
       setTimeout(() => {
         router.push("/auth/signin")

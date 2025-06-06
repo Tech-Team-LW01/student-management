@@ -138,7 +138,7 @@ export async function sendWelcomeEmail(email: string, password: string) {
   }
 }
 
-export async function sendResetPasswordEmail(email: string) {
+export async function sendResetPasswordEmail(email: string, actionCode: string) {
   const mailOptions = {
     from: process.env.EMAIL_FROM || `LinuxWorld <${process.env.GMAIL_EMAIL}>`,
     to: email,
@@ -217,7 +217,7 @@ export async function sendResetPasswordEmail(email: string) {
               <p>Hello,</p>
               <p>We received a request to reset your password for your LinuxWorld account. Click the button below to reset your password:</p>
               
-              <a href="${process.env.NEXT_PUBLIC_APP_URL}/reset-password" class="button">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL}/reset-password?oobCode=${actionCode}" class="button">
                 Reset Password
               </a>
 
@@ -227,7 +227,7 @@ export async function sendResetPasswordEmail(email: string) {
 
               <p>If the button above doesn't work, you can also copy and paste this link into your browser:</p>
               <p style="word-break: break-all; color: #64748b;">
-                ${process.env.NEXT_PUBLIC_APP_URL}/reset-password
+                ${process.env.NEXT_PUBLIC_APP_URL}/reset-password?oobCode=${actionCode}
               </p>
             </div>
             <div class="footer">
@@ -245,7 +245,7 @@ export async function sendResetPasswordEmail(email: string) {
 
       We received a request to reset your password for your LinuxWorld account. Click the link below to reset your password:
 
-      ${process.env.NEXT_PUBLIC_APP_URL}/reset-password
+      ${process.env.NEXT_PUBLIC_APP_URL}/reset-password?oobCode=${actionCode}
 
       Important: This link will expire in 1 hour. If you did not request a password reset, please ignore this email or contact support if you have concerns.
 

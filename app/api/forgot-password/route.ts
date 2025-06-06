@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/firebase"
 import { sendPasswordResetEmail } from "firebase/auth"
-import { sendResetPasswordEmail } from "@/lib/email-utils"
 
 export async function POST(request: Request) {
   try {
@@ -22,9 +21,6 @@ export async function POST(request: Request) {
 
     // Send password reset email using Firebase
     await sendPasswordResetEmail(auth, email, actionCodeSettings)
-
-    // Send custom email using Nodemailer
-    await sendResetPasswordEmail(email)
 
     return NextResponse.json({
       success: true,
