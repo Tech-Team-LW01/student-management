@@ -29,14 +29,15 @@ export async function POST(request: Request) {
     const oneHourAgo = new Date(Date.now() - 3600000); // 1 hour ago
     const otpAttemptsQuery = query(
       collection(db, 'otpAttempts'),
-      where('email', '==', email),
-      where('timestamp', '>', oneHourAgo)
+      where('email', '==', email)
     );
     
     const attemptsSnapshot = await getDocs(otpAttemptsQuery);
-    const attemptsCount = attemptsSnapshot.size;
+    const recentAttempts = attemptsSnapshot.docs
+      .map(doc => doc.data())
+      .filter(data => data.timestamp?.toDate() > oneHourAgo);
 
-    if (attemptsCount >= 5) {
+    if (recentAttempts.length >= 5) {
       return NextResponse.json(
         { error: 'Too many attempts. Please try again later.' },
         { status: 429 }
