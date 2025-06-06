@@ -80,6 +80,12 @@ export default function SignInPage() {
               />
             </div>
 
+            <div className="flex justify-end">
+              <Link href="/forgot-password" className="text-sm text-primary hover:underline">
+                Forgot Password?
+              </Link>
+            </div>
+
             <Button type="submit" className="w-full" disabled={authLoading}>
               {authLoading ? "Signing in..." : "Sign In"}
             </Button>

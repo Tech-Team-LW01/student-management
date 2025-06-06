@@ -1,10 +1,8 @@
-
-
 "use client"
 
 import type React from "react"
 import { createContext, useState, useEffect, useContext } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -58,85 +56,57 @@ export const useAuth = () => {
   return context
 }
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [user, setUser] = useState<User | null>(null)
-  const [authLoading, setAuthLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [isInitialized, setIsInitialized] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let mounted = true
-
-    // Check if there's a default super admin session in localStorage
-    const checkDefaultAdmin = () => {
-      const storedAdmin = localStorage.getItem('defaultSuperAdmin')
-      if (storedAdmin === 'true') {
-        setUser(DEFAULT_SUPER_ADMIN.userData)
-        setIsInitialized(true)
-        setAuthLoading(false)
-        return true
-      }
-      return false
-    }
-
-    // First check for default admin
-    if (checkDefaultAdmin()) {
-      return
-    }
-
-    // Then check Firebase auth
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (!mounted) return
-
-      try {
-        if (firebaseUser) {
-          console.log("Firebase user detected:", firebaseUser.uid)
-          
+      if (firebaseUser) {
+        try {
           const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
-
           if (userDoc.exists()) {
-            const userData = { id: firebaseUser.uid, ...userDoc.data() } as User
-            if (mounted) {
-              setUser(userData)
-              console.log("User data loaded from Firestore:", userData)
-            }
-          } else {
-            console.warn("User data not found in Firestore. Signing out.")
-            await signOut(auth)
-            if (mounted) {
-              setUser(null)
+            const userData = userDoc.data()
+            setUser({
+              id: firebaseUser.uid,
+              email: firebaseUser.email!,
+              name: userData.name,
+              role: userData.role,
+              isApproved: userData.isApproved,
+              assignedGroups: userData.assignedGroups || [],
+              totalAnnouncementsViewed: userData.totalAnnouncementsViewed || 0,
+              registrationDate: userData.registrationDate,
+              createdAt: userData.createdAt,
+              updatedAt: userData.updatedAt,
+              notificationPreferences: userData.notificationPreferences,
+              forcePasswordChange: userData.forcePasswordChange || false
+            })
+
+            // Check if user needs to change password
+            if (userData.forcePasswordChange && !pathname.includes("/force-password-change")) {
+              router.push("/force-password-change")
             }
           }
-        } else {
-          console.log("No Firebase user detected")
-          if (mounted) {
-            setUser(null)
-          }
+        } catch (error) {
+          console.error("Error fetching user data:", error)
         }
-      } catch (error) {
-        console.error("Error in auth state change:", error)
-        if (mounted) {
-          setUser(null)
-          setError("Failed to load user data")
-        }
-      } finally {
-        if (mounted) {
-          setIsInitialized(true)
-          setAuthLoading(false)
-        }
+      } else {
+        setUser(null)
       }
+      setLoading(false)
+      setIsInitialized(true)
     })
 
-    return () => {
-      mounted = false
-      unsubscribe()
-    }
-  }, [])
+    return () => unsubscribe()
+  }, [router, pathname])
 
   const signUp = async (userData: Partial<User>, password: string) => {
     try {
-      setAuthLoading(true)
+      setLoading(true)
       setError(null)
 
       // Prevent signup with default admin email
@@ -181,13 +151,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(error.message)
       throw error
     } finally {
-      setAuthLoading(false)
+      setLoading(false)
     }
   }
 
   const signIn = async (email: string, password: string) => {
     try {
-      setAuthLoading(true)
+      setLoading(true)
       setError(null)
       
       // Check if it's the default super admin login
@@ -230,13 +200,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(error.message)
       throw error
     } finally {
-      setAuthLoading(false)
+      setLoading(false)
     }
   }
 
   const signOutUser = async () => {
     try {
-      setAuthLoading(true)
+      setLoading(true)
       setError(null)
       console.log("Signing out...")
       
@@ -259,13 +229,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Even if there's an error, try to redirect
       router.push('/auth/signin')
     } finally {
-      setAuthLoading(false)
+      setLoading(false)
     }
   }
 
   const updateUser = async (userData: Partial<User>) => {
     try {
-      setAuthLoading(true)
+      setLoading(true)
       setError(null)
 
       // Handle default super admin update
@@ -315,7 +285,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error("Update user error:", error)
       setError(error.message)
     } finally {
-      setAuthLoading(false)
+      setLoading(false)
     }
   }
 
@@ -325,7 +295,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signIn,
     signOutUser,
     updateUser,
-    authLoading,
+    authLoading: loading,
     error,
     isInitialized,
   }

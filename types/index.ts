@@ -22,6 +22,7 @@ export interface User {
     announcementEmails: boolean
     groupActivityEmails: boolean
   }
+  forcePasswordChange?: boolean
 }
 
 // Rest of your interfaces remain the same...
@@ -43,13 +44,15 @@ export interface Announcement {
   id: string
   title: string
   content: string
-  groupId: string
+  groupIds: string[]
+  groupId?: string  // For backward compatibility
   createdBy: string
   createdAt: Timestamp | Date
   updatedAt: Timestamp | Date
   files: AnnouncementFile[]
   viewCount: number
   viewedBy: string[]
+  priority?: boolean
 }
 
 export interface AnnouncementFile {

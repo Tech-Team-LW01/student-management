@@ -78,6 +78,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         { title: "Groups Management", url: "/admin/groups", icon: BookOpen },
         { title: "Pending Approvals", url: "/admin/approvals", icon: UserCheck },
         { title: "Announcements", url: "/admin/announcements", icon: MessageSquare },
+        { title: "Bulk Create", url: "/admin/bulk-create", icon: UserPlus },
         { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
         { title: "Profile", url: "/profile", icon: Settings },
       ]
@@ -91,6 +92,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         { title: "Groups Management", url: "/admin/groups", icon: BookOpen },
         { title: "Pending Approvals", url: "/admin/approvals", icon: UserCheck },
         { title: "Announcements", url: "/admin/announcements", icon: MessageSquare },
+        { title: "Bulk Create", url: "/admin/bulk-create", icon: UserPlus },
         { title: "Create Admin", url: "/admin/create-admin", icon: UserPlus },
         { title: "Platform Settings", url: "/admin/settings", icon: Shield },
         { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },

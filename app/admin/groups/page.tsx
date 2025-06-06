@@ -20,10 +20,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { getGroups, createGroup, updateGroup, deleteGroup, uploadFile } from "@/lib/firebase-utils"
+import { getGroups, createGroup, updateGroup, deleteGroup, uploadFile, getStudentsByGroupId, removeUserFromGroup } from "@/lib/firebase-utils"
 import { useAuth } from "@/contexts/auth-context"
-import type { Group } from "@/types"
-import { Plus, Edit, Trash2, Upload, ExternalLink } from "lucide-react"
+import type { Group, User } from "@/types"
+import { Plus, Edit, Trash2, Upload, ExternalLink, Users, UserMinus } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 export default function GroupsPage() {
   const { user } = useAuth()
@@ -40,6 +42,11 @@ export default function GroupsPage() {
   })
   const [formLoading, setFormLoading] = useState(false)
   const [error, setError] = useState("")
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
+  const [groupMembers, setGroupMembers] = useState<User[]>([])
+  const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false)
+  const [membersLoading, setMembersLoading] = useState(false)
+  const [removingMember, setRemovingMember] = useState<string | null>(null)
 
   useEffect(() => {
     fetchGroups()
@@ -150,6 +157,46 @@ export default function GroupsPage() {
       setGroups((prev) => prev.filter((group) => group.id !== groupId))
     } catch (error) {
       console.error("Error deleting group:", error)
+    }
+  }
+
+  const handleViewMembers = async (group: Group) => {
+    setSelectedGroup(group)
+    setIsMembersDialogOpen(true)
+    setMembersLoading(true)
+    setGroupMembers([])
+
+    try {
+      const members = await getStudentsByGroupId(group.id)
+      setGroupMembers(members)
+    } catch (error) {
+      console.error("Error fetching group members:", error)
+    } finally {
+      setMembersLoading(false)
+    }
+  }
+
+  const handleRemoveMember = async (memberId: string) => {
+    if (!selectedGroup) return
+
+    setRemovingMember(memberId)
+    try {
+      await removeUserFromGroup(memberId, selectedGroup.id)
+      
+      // Update local state
+      setGroupMembers((prev) => prev.filter((member) => member.id !== memberId))
+      setGroups((prev) =>
+        prev.map((group) =>
+          group.id === selectedGroup.id
+            ? { ...group, memberCount: group.memberCount - 1, members: group.members.filter((id) => id !== memberId) }
+            : group,
+        ),
+      )
+    } catch (error) {
+      console.error("Error removing member:", error)
+      setError("Failed to remove member")
+    } finally {
+      setRemovingMember(null)
     }
   }
 
@@ -300,7 +347,12 @@ export default function GroupsPage() {
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <CardTitle className="truncate">{group.name}</CardTitle>
-                        <CardDescription>{group.memberCount} members</CardDescription>
+                        <CardDescription>
+                          <div className="flex items-center gap-2">
+                            {/* <Users className="h-4 w-4" /> */}
+                            {/* <span>{group.memberCount} members</span> */}
+                          </div>
+                        </CardDescription>
                       </div>
                     </div>
                   </CardHeader>
@@ -327,6 +379,15 @@ export default function GroupsPage() {
                     </div>
 
                     <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => handleViewMembers(group)}
+                        className="flex-1"
+                      >
+                        <Users className="h-3 w-3 mr-1" />
+                        View Members
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => handleEdit(group)} className="flex-1">
                         <Edit className="h-3 w-3 mr-1" />
                         Edit
@@ -346,6 +407,56 @@ export default function GroupsPage() {
             </div>
           )}
         </div>
+
+        {/* Members Dialog */}
+        <Dialog open={isMembersDialogOpen} onOpenChange={setIsMembersDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>
+                {selectedGroup?.name} - Members ({groupMembers.length})
+              </DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="max-h-[60vh]">
+              {membersLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : groupMembers.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No members in this group yet.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {groupMembers.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center gap-4 p-4 rounded-lg border bg-card"
+                    >
+                      <Avatar>
+                        <AvatarImage src={member.profileImage} />
+                        <AvatarFallback>{member.name.charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{member.name}</p>
+                        <p className="text-sm text-muted-foreground truncate">{member.email}</p>
+                      </div>
+                      <Badge variant="outline">{member.role}</Badge>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRemoveMember(member.id)}
+                        disabled={removingMember === member.id}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <UserMinus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
       </MainLayout>
     </ProtectedRoute>
   )
