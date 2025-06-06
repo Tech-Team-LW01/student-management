@@ -100,7 +100,7 @@ export async function sendWelcomeEmail(email: string, password: string) {
 
               <p><strong>Important:</strong> For security reasons, you will be required to change your password when you first log in.</p>
               
-              <a href="${process.env.NEXT_PUBLIC_APP_URL}/login" class="button">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL}/auth/signin" class="button">
                 Login to Your Account
               </a>
             </div>
@@ -122,7 +122,7 @@ export async function sendWelcomeEmail(email: string, password: string) {
 
       Important: For security reasons, you will be required to change your password when you first log in.
 
-      Login to your account: ${process.env.NEXT_PUBLIC_APP_URL}/login
+      Login to your account: ${process.env.NEXT_PUBLIC_APP_URL}/auth/signin
 
       Best regards,
       The LinuxWorld Team
