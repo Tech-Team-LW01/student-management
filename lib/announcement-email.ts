@@ -529,27 +529,21 @@ ${announcement.files.map(file => `
   `
 
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/api/send-email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: studentEmail,
-        subject,
-        html,
-        text,
-      }),
-    })
+    const { data, error } = await resend.emails.send({
+      from: 'LinuxWorld <notifications@linuxworld.com>',
+      to: studentEmail,
+      subject,
+      html,
+      text,
+    });
 
-    if (!response.ok) {
-      throw new Error('Failed to send email')
+    if (error) {
+      throw new Error(error.message);
     }
 
-    return await response.json()
+    return data;
   } catch (error) {
-    console.error('Error sending announcement email:', error)
-    throw error
+    console.error('Error sending announcement email:', error);
+    throw error;
   }
 }
