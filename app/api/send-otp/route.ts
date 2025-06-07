@@ -26,7 +26,9 @@ export async function POST(request: Request) {
     }
 
     // Check rate limiting using Firestore
-    const oneHourAgo = new Date(Date.now() - 3600000); // 1 hour ago
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    
+    // Simple query for per-email rate limiting
     const otpAttemptsQuery = query(
       collection(db, 'otpAttempts'),
       where('email', '==', email)
@@ -35,11 +37,37 @@ export async function POST(request: Request) {
     const attemptsSnapshot = await getDocs(otpAttemptsQuery);
     const recentAttempts = attemptsSnapshot.docs
       .map(doc => doc.data())
-      .filter(data => data.timestamp?.toDate() > oneHourAgo);
+      .filter(data => {
+        const timestamp = data.timestamp?.toDate();
+        return timestamp && timestamp > fiveMinutesAgo;
+      });
 
-    if (recentAttempts.length >= 5) {
+    if (recentAttempts.length >= 3) {
+      const oldestAttempt = recentAttempts[recentAttempts.length - 1];
+      const timeToWait = Math.ceil((fiveMinutesAgo.getTime() - oldestAttempt.timestamp.toDate().getTime()) / 1000 / 60);
+      
       return NextResponse.json(
-        { error: 'Too many attempts. Please try again later.' },
+        { error: `Too many attempts. Please wait ${timeToWait} minutes before trying again.` },
+        { status: 429 }
+      );
+    }
+
+    // Simple query for global rate limiting
+    const globalQuery = query(
+      collection(db, 'otpAttempts')
+    );
+    
+    const globalSnapshot = await getDocs(globalQuery);
+    const globalRecentAttempts = globalSnapshot.docs
+      .map(doc => doc.data())
+      .filter(data => {
+        const timestamp = data.timestamp?.toDate();
+        return timestamp && timestamp > fiveMinutesAgo;
+      });
+
+    if (globalRecentAttempts.length >= 10) {
+      return NextResponse.json(
+        { error: 'System is busy. Please try again in a few minutes.' },
         { status: 429 }
       );
     }
@@ -49,6 +77,7 @@ export async function POST(request: Request) {
       email,
       timestamp: serverTimestamp(),
       otp,
+      ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
     });
 
     // Send the email

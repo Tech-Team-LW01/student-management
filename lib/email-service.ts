@@ -17,12 +17,6 @@ const createGmailTransporter = () => {
 };
 
 export async function sendOTPEmail(email: string, otp: string, name: string) {
-  // Skip email sending during build process
-  if (process.env.NODE_ENV === 'production' && !process.env.RUNTIME) {
-    console.log('Skipping email send during build process');
-    return { success: true, messageId: 'build-mode' };
-  }
-
   const subject = 'Verify your LinuxWorld Account - OTP';
   
   const html = `
