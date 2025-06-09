@@ -542,56 +542,138 @@ export default function UsersPage() {
                 </div>
 
                 {(bulkSearchResults.inGroups.length > 0 || bulkSearchResults.notInGroups.length > 0) && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Users in Groups */}
-                    <div className="space-y-2">
-                      <h4 className="font-medium text-sm">Users in Groups ({bulkSearchResults.inGroups.length})</h4>
-                      <div className="border rounded-lg divide-y">
-                        {bulkSearchResults.inGroups.map(user => (
-                          <div key={user.id} className="p-3 flex items-center justify-between">
-                            <div>
-                              <p className="font-medium">{user.name}</p>
-                              <p className="text-sm text-muted-foreground">{user.email}</p>
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              {user.assignedGroups?.map(groupId => {
-                                const group = groups.find(g => g.id === groupId)
-                                return group ? (
-                                  <Badge key={groupId} variant="outline" className="text-xs">
-                                    {group.name}
-                                  </Badge>
-                                ) : null
-                              })}
-                            </div>
-                          </div>
-                        ))}
+                  <div className="space-y-6">
+                    {/* Users in Groups Table */}
+                    {bulkSearchResults.inGroups.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-sm">Users in Groups ({bulkSearchResults.inGroups.length})</h4>
+                        </div>
+                        <div className="border rounded-lg overflow-hidden">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="bg-gray-50 border-b">
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Groups</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {bulkSearchResults.inGroups.map(user => (
+                                <tr key={user.id} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="flex items-center gap-2">
+                                      <Avatar className="h-8 w-8">
+                                        <AvatarImage src={user.profileImage || "/placeholder.svg"} />
+                                        <AvatarFallback className="text-sm bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                                          {user.name.charAt(0).toUpperCase()}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span className="font-medium">{user.name}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                    {user.email}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <Badge className={`${getRoleColor(user.role)} border flex items-center gap-1`}>
+                                      {getRoleIcon(user.role)}
+                                      <span className="text-xs">{getRoleDisplayName(user.role)}</span>
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex flex-wrap gap-1">
+                                      {user.assignedGroups?.map(groupId => {
+                                        const group = groups.find(g => g.id === groupId)
+                                        return group ? (
+                                          <Badge key={groupId} variant="outline" className="text-xs">
+                                            {group.name}
+                                          </Badge>
+                                        ) : null
+                                      })}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
-                    {/* Users not in Groups */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium text-sm">
-                          Users not in Groups ({bulkSearchResults.notInGroups.length})
-                        </h4>
-                        {bulkSearchResults.notInGroups.length > 0 && (
+                    {/* Users not in Groups Table */}
+                    {bulkSearchResults.notInGroups.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-sm">
+                            Users not in Groups ({bulkSearchResults.notInGroups.length})
+                          </h4>
                           <Button
                             size="sm"
                             onClick={() => setBulkGroupDialogOpen(true)}
                           >
                             Assign to Groups
                           </Button>
-                        )}
+                        </div>
+                        <div className="border rounded-lg overflow-hidden">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="bg-gray-50 border-b">
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {bulkSearchResults.notInGroups.map(user => (
+                                <tr key={user.id} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="flex items-center gap-2">
+                                      <Avatar className="h-8 w-8">
+                                        <AvatarImage src={user.profileImage || "/placeholder.svg"} />
+                                        <AvatarFallback className="text-sm bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                                          {user.name.charAt(0).toUpperCase()}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span className="font-medium">{user.name}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                    {user.email}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <Badge className={`${getRoleColor(user.role)} border flex items-center gap-1`}>
+                                      {getRoleIcon(user.role)}
+                                      <span className="text-xs">{getRoleDisplayName(user.role)}</span>
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <Badge 
+                                      variant={user.isApproved ? "default" : "secondary"}
+                                      className={user.isApproved ? "bg-green-100 text-green-800" : ""}
+                                    >
+                                      {user.isApproved ? (
+                                        <>
+                                          <CheckCircle className="h-3 w-3 mr-1" />
+                                          Approved
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Clock className="h-3 w-3 mr-1" />
+                                          Pending
+                                        </>
+                                      )}
+                                    </Badge>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                      <div className="border rounded-lg divide-y">
-                        {bulkSearchResults.notInGroups.map(user => (
-                          <div key={user.id} className="p-3">
-                            <p className="font-medium">{user.name}</p>
-                            <p className="text-sm text-muted-foreground">{user.email}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </CardContent>
