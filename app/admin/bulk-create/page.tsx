@@ -1,14 +1,27 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ProtectedRoute } from "@/components/protected-route"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Loader2, AlertCircle, CheckCircle2, XCircle, Copy, RefreshCw } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle2, XCircle, Copy, RefreshCw, Users } from "lucide-react"
 import { toast } from "sonner"
+import { getGroups, assignUserToGroups } from "@/lib/firebase-utils"
+import type { Group } from "@/types"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Badge } from "@/components/ui/badge"
 
 interface UserCreationResult {
   email: string
@@ -24,6 +37,64 @@ export default function BulkCreatePage() {
   const [results, setResults] = useState<UserCreationResult[]>([])
   const [error, setError] = useState("")
   const [showPasswords, setShowPasswords] = useState(true)
+  const [groups, setGroups] = useState<Group[]>([])
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([])
+  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false)
+  const [assigningGroups, setAssigningGroups] = useState(false)
+
+  useEffect(() => {
+    fetchGroups()
+  }, [])
+
+  const fetchGroups = async () => {
+    try {
+      const groupsData = await getGroups()
+      setGroups(groupsData)
+    } catch (error) {
+      console.error("Error fetching groups:", error)
+    }
+  }
+
+  const handleGroupSelection = (groupId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedGroups(prev => [...prev, groupId])
+    } else {
+      setSelectedGroups(prev => prev.filter(id => id !== groupId))
+    }
+  }
+
+  const handleAssignGroups = async () => {
+    if (!selectedGroups.length) {
+      toast.error("Please select at least one group")
+      return
+    }
+
+    setAssigningGroups(true)
+    try {
+      // Get all successful user IDs from results
+      const userIds = results
+        .filter(result => result.status === "success" && result.userId)
+        .map(result => result.userId!)
+
+      if (userIds.length === 0) {
+        toast.error("No users to assign to groups")
+        return
+      }
+
+      // Assign each user to the selected groups
+      for (const userId of userIds) {
+        await assignUserToGroups(userId, selectedGroups)
+      }
+
+      toast.success(`Successfully assigned ${userIds.length} users to ${selectedGroups.length} groups`)
+      setIsGroupDialogOpen(false)
+    } catch (error) {
+      console.error("Error assigning users to groups:", error)
+      toast.error("Failed to assign users to groups")
+    } finally {
+      setAssigningGroups(false)
+    }
+  }
 
   const validateEmails = (emailList: string[]): string[] => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -94,7 +165,8 @@ export default function BulkCreatePage() {
             role: 'student',
             status: 'active',
             createdAt: new Date().toISOString(),
-          }))
+          })),
+          selectedGroups: selectedGroups
         }),
       })
 
@@ -109,13 +181,7 @@ export default function BulkCreatePage() {
       }
 
       if (data.results && data.results.length > 0) {
-        setResults(data.results.map((result: any) => ({
-          email: result.email,
-          status: "success",
-          message: "User created successfully",
-          password: result.password,
-          userId: result.userId
-        })))
+        setResults(data.results)
         toast.success("Users created successfully")
       }
     } catch (error: any) {
@@ -132,7 +198,87 @@ export default function BulkCreatePage() {
         <div className="container mx-auto py-6 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Bulk Create Students</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Bulk Create Students</CardTitle>
+                {results.length > 0 && (
+                  <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline">
+                        <Users className="h-4 w-4 mr-2" />
+                        Assign to Groups
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Assign to Groups</DialogTitle>
+                        <DialogDescription>
+                          Select the groups to assign the newly created users to
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <ScrollArea className="h-[300px] pr-4">
+                          <div className="space-y-2">
+                            {groups.map((group) => (
+                              <label
+                                key={group.id}
+                                className="flex items-start space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors"
+                              >
+                                <Checkbox
+                                  id={`group-${group.id}`}
+                                  checked={selectedGroups.includes(group.id)}
+                                  onCheckedChange={(checked) =>
+                                    handleGroupSelection(group.id, checked as boolean)
+                                  }
+                                  className="mt-0.5"
+                                />
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium leading-none">
+                                    {group.name}
+                                  </p>
+                                  {group.description && (
+                                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                      {group.description}
+                                    </p>
+                                  )}
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-muted-foreground">
+                            {selectedGroups.length} group{selectedGroups.length !== 1 ? 's' : ''} selected
+                          </span>
+                          {selectedGroups.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedGroups([])}
+                              className="h-auto p-1 text-xs"
+                            >
+                              Clear all
+                            </Button>
+                          )}
+                        </div>
+                        <Button 
+                          onClick={handleAssignGroups} 
+                          disabled={assigningGroups || !selectedGroups.length}
+                          className="w-full"
+                        >
+                          {assigningGroups ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Assigning...
+                            </>
+                          ) : (
+                            "Assign to Selected Groups"
+                          )}
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -215,6 +361,107 @@ export default function BulkCreatePage() {
                         </AlertDescription>
                       </Alert>
                     ))}
+                  </div>
+
+                  {/* New Group Assignment Section */}
+                  <div className="mt-6 pt-6 border-t">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="font-medium">Group Assignment</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Assign the newly created users to groups
+                        </p>
+                      </div>
+                      <Dialog open={isGroupDialogOpen} onOpenChange={setIsGroupDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button>
+                            <Users className="h-4 w-4 mr-2" />
+                            Assign to Groups
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Assign to Groups</DialogTitle>
+                            <DialogDescription>
+                              Select the groups to assign the newly created users to
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <ScrollArea className="h-[300px] pr-4">
+                              <div className="space-y-2">
+                                {groups.map((group) => (
+                                  <label
+                                    key={group.id}
+                                    className="flex items-start space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors"
+                                  >
+                                    <Checkbox
+                                      id={`group-${group.id}`}
+                                      checked={selectedGroups.includes(group.id)}
+                                      onCheckedChange={(checked) =>
+                                        handleGroupSelection(group.id, checked as boolean)
+                                      }
+                                      className="mt-0.5"
+                                    />
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium leading-none">
+                                        {group.name}
+                                      </p>
+                                      {group.description && (
+                                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                          {group.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-muted-foreground">
+                                {selectedGroups.length} group{selectedGroups.length !== 1 ? 's' : ''} selected
+                              </span>
+                              {selectedGroups.length > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setSelectedGroups([])}
+                                  className="h-auto p-1 text-xs"
+                                >
+                                  Clear all
+                                </Button>
+                              )}
+                            </div>
+                            <Button 
+                              onClick={handleAssignGroups} 
+                              disabled={assigningGroups || !selectedGroups.length}
+                              className="w-full"
+                            >
+                              {assigningGroups ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Assigning...
+                                </>
+                              ) : (
+                                "Assign to Selected Groups"
+                              )}
+                            </Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                    {selectedGroups.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedGroups.map(groupId => {
+                          const group = groups.find(g => g.id === groupId)
+                          return group ? (
+                            <Badge key={groupId} variant="secondary" className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {group.name}
+                            </Badge>
+                          ) : null
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

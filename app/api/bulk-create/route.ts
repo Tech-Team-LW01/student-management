@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { createUser } from "@/lib/firebase-utils"
+import { createUser, assignUserToGroups } from "@/lib/firebase-utils"
 import { sendWelcomeEmail } from "@/lib/email-utils"
 import { generatePassword } from "@/lib/utils"
 
 export async function POST(request: Request) {
   try {
-    const { users } = await request.json()
+    const { users, selectedGroups } = await request.json()
 
     if (!Array.isArray(users)) {
       return NextResponse.json(
@@ -28,6 +28,11 @@ export async function POST(request: Request) {
           password,
         })
 
+        // Assign user to selected groups if any
+        if (selectedGroups && selectedGroups.length > 0) {
+          await assignUserToGroups(userId, selectedGroups)
+        }
+
         // Send welcome email
         await sendWelcomeEmail(userData.email, password)
 
@@ -35,12 +40,15 @@ export async function POST(request: Request) {
           email: userData.email,
           password,
           userId,
+          status: "success",
+          message: "User created successfully"
         })
       } catch (error: any) {
         console.error(`Error creating user ${userData.email}:`, error)
         errors.push({
           email: userData.email,
-          error: error.message || "Failed to create user",
+          status: "error",
+          message: error.message || "Failed to create user"
         })
       }
     }

@@ -41,7 +41,7 @@ export default function SignInPage() {
            <Image
         src="/assets/LW@4x1.png" // Update this to the correct path for your logo
         alt="LinuxWorld Logo"
-        width={42}
+        width={160}
         height={48}
       />
           </div>

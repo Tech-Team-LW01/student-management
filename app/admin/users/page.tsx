@@ -105,6 +105,14 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [bulkSearchEmails, setBulkSearchEmails] = useState("")
+  const [bulkSearchResults, setBulkSearchResults] = useState<{
+    inGroups: User[];
+    notInGroups: User[];
+  }>({ inGroups: [], notInGroups: [] })
+  const [bulkGroupDialogOpen, setBulkGroupDialogOpen] = useState(false)
+  const [selectedBulkGroups, setSelectedBulkGroups] = useState<string[]>([])
+  const [bulkAssigning, setBulkAssigning] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -288,6 +296,51 @@ export default function UsersPage() {
 
   const hasActiveFilters = searchTerm || roleFilter !== "all" || statusFilter !== "all"
 
+  const handleBulkSearch = () => {
+    const emailList = bulkSearchEmails.split(',').map(email => email.trim().toLowerCase())
+    const matchedUsers = users.filter(user => emailList.includes(user.email.toLowerCase()))
+    
+    const inGroups = matchedUsers.filter(user => user.assignedGroups && user.assignedGroups.length > 0)
+    const notInGroups = matchedUsers.filter(user => !user.assignedGroups || user.assignedGroups.length === 0)
+    
+    setBulkSearchResults({ inGroups, notInGroups })
+  }
+
+  const handleBulkGroupAssignment = async () => {
+    if (!currentUser || selectedBulkGroups.length === 0) return
+    
+    setBulkAssigning(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const promises = bulkSearchResults.notInGroups.map(user => 
+        assignUserToGroups(user.id, selectedBulkGroups, currentUser.id)
+      )
+      
+      await Promise.all(promises)
+      
+      // Update local state
+      setUsers(prev => prev.map(user => {
+        if (bulkSearchResults.notInGroups.some(u => u.id === user.id)) {
+          return { ...user, assignedGroups: selectedBulkGroups }
+        }
+        return user
+      }))
+
+      setSuccess(`Successfully assigned ${bulkSearchResults.notInGroups.length} users to selected groups.`)
+      setBulkGroupDialogOpen(false)
+      setSelectedBulkGroups([])
+      setBulkSearchResults({ inGroups: [], notInGroups: [] })
+      setBulkSearchEmails("")
+    } catch (error: any) {
+      console.error("Error assigning groups:", error)
+      setError(error.message || "Failed to assign groups.")
+    } finally {
+      setBulkAssigning(false)
+    }
+  }
+
   if (loading) {
     return (
       <ProtectedRoute allowedRoles={["super_admin", "admin"]}>
@@ -462,6 +515,83 @@ export default function UsersPage() {
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Filter className="h-4 w-4" />
                     <span>Showing {filteredUsers.length} of {users.length} users</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Bulk Group Assignment Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Bulk Group Assignment</CardTitle>
+                <CardDescription>
+                  Search users by email and assign them to groups in bulk
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-3">
+                  <Input
+                    placeholder="Enter emails separated by commas..."
+                    value={bulkSearchEmails}
+                    onChange={(e) => setBulkSearchEmails(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button onClick={handleBulkSearch}>
+                    Search
+                  </Button>
+                </div>
+
+                {(bulkSearchResults.inGroups.length > 0 || bulkSearchResults.notInGroups.length > 0) && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Users in Groups */}
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-sm">Users in Groups ({bulkSearchResults.inGroups.length})</h4>
+                      <div className="border rounded-lg divide-y">
+                        {bulkSearchResults.inGroups.map(user => (
+                          <div key={user.id} className="p-3 flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">{user.name}</p>
+                              <p className="text-sm text-muted-foreground">{user.email}</p>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {user.assignedGroups?.map(groupId => {
+                                const group = groups.find(g => g.id === groupId)
+                                return group ? (
+                                  <Badge key={groupId} variant="outline" className="text-xs">
+                                    {group.name}
+                                  </Badge>
+                                ) : null
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Users not in Groups */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium text-sm">
+                          Users not in Groups ({bulkSearchResults.notInGroups.length})
+                        </h4>
+                        {bulkSearchResults.notInGroups.length > 0 && (
+                          <Button
+                            size="sm"
+                            onClick={() => setBulkGroupDialogOpen(true)}
+                          >
+                            Assign to Groups
+                          </Button>
+                        )}
+                      </div>
+                      <div className="border rounded-lg divide-y">
+                        {bulkSearchResults.notInGroups.map(user => (
+                          <div key={user.id} className="p-3">
+                            <p className="font-medium">{user.name}</p>
+                            <p className="text-sm text-muted-foreground">{user.email}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -896,6 +1026,100 @@ export default function UsersPage() {
                     </div>
                   </div>
                 )}
+              </DialogContent>
+            </Dialog>
+
+            {/* Bulk Group Assignment Dialog */}
+            <Dialog open={bulkGroupDialogOpen} onOpenChange={setBulkGroupDialogOpen}>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Assign Users to Groups</DialogTitle>
+                  <DialogDescription>
+                    Select groups to assign to {bulkSearchResults.notInGroups.length} users
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <div className="border rounded-lg p-4 max-h-64 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {groups.map((group) => (
+                        <label
+                          key={group.id}
+                          className="flex items-start space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors"
+                        >
+                          <Checkbox
+                            id={`bulk-group-${group.id}`}
+                            checked={selectedBulkGroups.includes(group.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedBulkGroups(prev => [...prev, group.id])
+                              } else {
+                                setSelectedBulkGroups(prev => prev.filter(id => id !== group.id))
+                              }
+                            }}
+                            className="mt-0.5"
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium leading-none">
+                              {group.name}
+                            </p>
+                            {group.description && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                {group.description}
+                              </p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">
+                      {selectedBulkGroups.length} group{selectedBulkGroups.length !== 1 ? 's' : ''} selected
+                    </span>
+                    {selectedBulkGroups.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedBulkGroups([])}
+                        className="h-auto p-1 text-xs"
+                      >
+                        Clear all
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <Button 
+                      onClick={handleBulkGroupAssignment} 
+                      disabled={bulkAssigning || selectedBulkGroups.length === 0} 
+                      className="flex-1"
+                    >
+                      {bulkAssigning ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                          Assigning...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Assign to Selected Groups
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setBulkGroupDialogOpen(false)
+                        setSelectedBulkGroups([])
+                      }}
+                      disabled={bulkAssigning}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
               </DialogContent>
             </Dialog>
           </div>

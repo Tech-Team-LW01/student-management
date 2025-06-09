@@ -39,6 +39,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import Image from "next/image"
 
 interface MainLayoutProps {
   children: React.ReactNode
@@ -141,7 +142,15 @@ export function MainLayout({ children }: MainLayoutProps) {
       <Sidebar>
         <SidebarHeader>
           <div className="flex items-center gap-2 px-4 py-2">
-            <BookOpen className="h-6 w-6 text-blue-600" />
+            <div className="relative h-12 w-12">
+              <Image
+                src="/assets/LW@4x1.png"
+                alt="LinuxWorld Logo"
+                fill
+                className="object-contain"
+                priority
+              />
+            </div>
             <div className="flex flex-col">
               <span className="font-semibold text-gray-900">LinuxWorld</span>
               <span className="text-xs text-gray-500">Classroom Management</span>

@@ -29,19 +29,41 @@ export default function ProfilePage() {
     const file = e.target.files?.[0]
     if (!file || !user) return
 
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image size should be less than 5MB")
+      return
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError("Please upload an image file")
+      return
+    }
+
     try {
       setLoading(true)
-      setError("") // Clear any previous errors
+      setError("")
+      
+      // Create a unique path for the image
       const imagePath = `profiles/${user.id}/${Date.now()}-${file.name}`
+      
+      // Upload the image
       const imageUrl = await uploadFile(file, imagePath)
+      
+      // Update the form data with the new image URL
       setFormData((prev) => ({ ...prev, profileImage: imageUrl }))
-      setSuccess("Image uploaded successfully!")
+      
+      // Update the user's profile in the database
+      await updateUser(formData) // Changed from updateProfile to updateUser
+      
+      setSuccess("Profile image updated successfully!")
       
       // Clear success message after 3 seconds
       setTimeout(() => setSuccess(""), 3000)
     } catch (error) {
       console.error("Error uploading image:", error)
-      setError("Failed to upload image")
+      setError("Failed to upload image. Please try again.")
     } finally {
       setLoading(false)
     }
