@@ -377,7 +377,11 @@
 //         const batch = userGroups.slice(i, i + batchSize)
 
 //         try {
-//           const q = query(collection(db, "announcements"), where("groupId", "in", batch), orderBy("createdAt", "desc"))
+//           const q = query(
+//             collection(db, "announcements"),
+//             where("groupIds", "array-contains-any", batch),
+//             orderBy("createdAt", "desc")
+//           )
 //           const snapshot = await getDocs(q)
 
 //           const batchAnnouncements = snapshot.docs.map((doc) => ({
@@ -784,6 +788,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
 import { db, storage, auth } from "./firebase"
 import type { User, Group, Announcement } from "@/types"
+import { createUserWithEmailAndPassword } from "firebase/auth"
 
 // Default platform settings - used as fallback
 const DEFAULT_PLATFORM_SETTINGS = {
@@ -1181,7 +1186,11 @@ export const getAnnouncements = async (userGroups?: string[]): Promise<Announcem
         const batch = userGroups.slice(i, i + batchSize)
 
         try {
-          const q = query(collection(db, "announcements"), where("groupId", "in", batch), orderBy("createdAt", "desc"))
+          const q = query(
+            collection(db, "announcements"),
+            where("groupIds", "array-contains-any", batch),
+            orderBy("createdAt", "desc")
+          )
           const snapshot = await getDocs(q)
 
           const batchAnnouncements = snapshot.docs.map((doc) => ({
@@ -1197,51 +1206,24 @@ export const getAnnouncements = async (userGroups?: string[]): Promise<Announcem
         }
       }
     } else {
-      // Get all announcements
-      try {
-        const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"))
-        const snapshot = await getDocs(q)
-
-        announcements = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: convertTimestamp(doc.data().createdAt),
-          updatedAt: convertTimestamp(doc.data().updatedAt),
-        })) as Announcement[]
-      } catch (orderError) {
-        // Fallback without ordering if index doesn't exist
-        console.warn("Could not order announcements, fetching without order:", orderError)
-        const snapshot = await getDocs(collection(db, "announcements"))
-
-        announcements = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: convertTimestamp(doc.data().createdAt),
-          updatedAt: convertTimestamp(doc.data().updatedAt),
-        })) as Announcement[]
-
-        // Sort manually
-        announcements.sort((a, b) => {
-          const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(0)
-          const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(0)
-          return dateB.getTime() - dateA.getTime()
-        })
-      }
+      // Get all announcements when no groups are specified
+      const q = query(
+        collection(db, "announcements"),
+        orderBy("createdAt", "desc")
+      )
+      const snapshot = await getDocs(q)
+      
+      announcements = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: convertTimestamp(doc.data().createdAt),
+        updatedAt: convertTimestamp(doc.data().updatedAt),
+      })) as Announcement[]
     }
-
-    // Remove duplicates and sort
-    const uniqueAnnouncements = announcements.filter(
-      (announcement, index, self) => index === self.findIndex((a) => a.id === announcement.id),
-    )
-
-    return uniqueAnnouncements.sort((a, b) => {
-      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(0)
-      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(0)
-      return dateB.getTime() - dateA.getTime()
-    })
+    return announcements
   } catch (error) {
     console.error("Error getting announcements:", error)
-    return []
+    throw error
   }
 }
 
@@ -1270,7 +1252,7 @@ export const createAnnouncement = async (announcementData: Omit<Announcement, "i
               ...announcementData,
               id: docRef.id,
             },
-            groupId: announcementData.groupId,
+            groupIds: announcementData.groupIds,
           }),
         });
         
@@ -1548,7 +1530,7 @@ export const getPlatformSettings = async () => {
       try {
         await setDoc(doc(db, "settings", "platform"), {
           ...DEFAULT_PLATFORM_SETTINGS,
-                    createdAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         })
         console.log("✅ Created default platform settings")
@@ -1808,4 +1790,44 @@ export default {
   getAnalytics,
   getPlatformSettings,
   savePlatformSettings,
+}
+
+export async function createUser(userData: {
+  email: string;
+  password: string;
+  role?: string;
+  status?: string;
+  createdAt?: string;
+}) {
+  try {
+    // Create auth user
+    const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password)
+
+    // Create user document
+    const userDoc = {
+      id: userCredential.user.uid,
+      email: userData.email,
+      name: `Student ${Math.floor(Math.random() * 1000)}`, // Temporary name
+      role: userData.role || "student",
+      isApproved: true,
+      assignedGroups: [],
+      totalAnnouncementsViewed: 0,
+      registrationDate: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      notificationPreferences: {
+        emailNotifications: true,
+        announcementEmails: true,
+        groupActivityEmails: true
+      },
+      forcePasswordChange: true // Flag to force password change on first login
+    }
+
+    await setDoc(doc(db, "users", userCredential.user.uid), userDoc)
+
+    return userCredential.user.uid
+  } catch (error) {
+    console.error("Error creating user:", error)
+    throw error
+  }
 }

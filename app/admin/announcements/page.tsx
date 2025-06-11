@@ -34,7 +34,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import {
   getGroups,
@@ -82,6 +82,7 @@ import {
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { Timestamp } from "firebase/firestore"
 
 // Enhanced notification component
 const NotificationToast = ({ 
@@ -316,219 +317,142 @@ const MessageBubble = ({
 }) => {
   const getFileIcon = (fileType: string) => {
     const type = fileType.toLowerCase()
-    if (type.startsWith("image/")) return <ImageIcon className="h-4 w-4 text-green-200" />
-    if (type.startsWith("video/")) return <Video className="h-4 w-4 text-green-200" />
-    if (type.startsWith("audio/")) return <Music className="h-4 w-4 text-green-200" />
-    if (type.includes("pdf")) return <FileText className="h-4 w-4 text-green-200" />
-    return <File className="h-4 w-4 text-green-200" />
+    if (type.startsWith("image/")) return <ImageIcon className="h-4 w-4" />
+    if (type.startsWith("video/")) return <Video className="h-4 w-4" />
+    if (type.startsWith("audio/")) return <Music className="h-4 w-4" />
+    if (type.includes("pdf")) return <FileText className="h-4 w-4" />
+    if (type.includes("zip") || type.includes("rar") || type.includes("tar")) return <Archive className="h-4 w-4" />
+    return <File className="h-4 w-4" />
   }
 
-  const formatTime = (date: Date | string) => {
-    const d = date instanceof Date ? date : new Date(date)
-    const now = new Date()
-    const diffInHours = (now.getTime() - d.getTime()) / (1000 * 60 * 60)
-
-    if (diffInHours < 1) {
-      const minutes = Math.floor(diffInHours * 60)
-      return `${minutes}m ago`
-    } else if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)}h ago`
-    } else if (diffInHours < 168) {
-      return d.toLocaleDateString("en-US", { weekday: "short" })
-    } else {
-      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    }
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return 'Size unknown'
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(1024))
+    return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`
   }
 
-  const formatFullDateTime = (date: Date | string) => {
-    const d = date instanceof Date ? date : new Date(date)
-    return d.toLocaleString("en-US", {
+  const formatTime = (date: Date | Timestamp) => {
+    if (!date) return ""
+    const d = date instanceof Date ? date : date.toDate()
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+    })
+  }
+
+  const formatFullDateTime = (date: Date | Timestamp) => {
+    if (!date) return ""
+    const d = date instanceof Date ? date : date.toDate()
+    return d.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "long",
       day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+      timeZoneName: "short",
     })
   }
 
-  const groupName = groups.find((g) => g.id === announcement.groupId)?.name || "Unknown Group"
+  const groupNames = announcement.groupIds && announcement.groupIds.length > 0
+    ? announcement.groupIds
+        .map(id => groups.find(g => g.id === id)?.name || "Unknown Group")
+        .join(", ")
+    : "All Groups"
 
   return (
-    <div className="flex justify-end mb-6">
-      <div className="max-w-2xl w-full">
-        <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-2xl rounded-br-md p-4 shadow-lg relative group hover:shadow-xl transition-all duration-200">
-          {/* Message Options */}
-          <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  className="h-8 w-8 p-0 rounded-full shadow-md hover:shadow-lg bg-white text-gray-700"
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {canViewUsers && (
-                  <DropdownMenuItem
-                    onClick={() => onView(announcement.id, announcement.title)}
-                    className="cursor-pointer"
-                  >
-                    <EyeIcon className="h-4 w-4 mr-2" />
-                    View Readers ({announcement.viewCount})
-                  </DropdownMenuItem>
-                )}
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <DropdownMenuItem
-                      onSelect={(e) => e.preventDefault()}
-                      className="text-red-600 focus:text-red-600 cursor-pointer"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete Message
-                    </DropdownMenuItem>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle className="flex items-center gap-2">
-                        <AlertCircle className="h-5 w-5 text-red-600" />
-                        Delete Announcement
-                      </AlertDialogTitle>
-                      <AlertDialogDescription className="text-gray-600">
-                        Are you sure you want to delete this announcement? This action cannot be undone
-                        and will remove the message and all its attachments permanently.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => onDelete(announcement.id)}
-                        disabled={deleteLoading === announcement.id}
-                        className="bg-red-600 hover:bg-red-700"
-                      >
-                        {deleteLoading === announcement.id ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Deleting...
-                          </>
-                        ) : (
-                          "Delete"
-                        )}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          {/* Group Badge */}
-          <div className="flex items-center gap-2 mb-3">
-            <Badge 
-              variant="secondary" 
-              className="bg-green-400/30 text-green-100 border-green-400/40 text-xs font-medium px-2 py-1"
-            >
-              <Hash className="h-3 w-3 mr-1" />
-              {groupName}
-            </Badge>
-            <div className="flex items-center gap-1 text-green-100 text-xs">
-              <Calendar className="h-3 w-3" />
-              <span>{formatTime(announcement.createdAt)}</span>
-            </div>
-          </div>
-
-          {/* Message Title */}
-          {announcement.title && (
-            <h4 className="font-semibold text-lg mb-3 text-white">
-              {announcement.title}
-            </h4>
-          )}
-
-          {/* Message Content */}
-          <div className="space-y-4">
-            <p className="text-sm leading-relaxed whitespace-pre-wrap text-green-50">
-              {announcement.content}
-            </p>
-
-            {/* File Attachments */}
-            {announcement.files.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-green-100 text-xs font-medium">
-                  <Paperclip className="h-3 w-3" />
-                  <span>{announcement.files.length} attachment{announcement.files.length > 1 ? 's' : ''}</span>
-                </div>
-                
-                <div className="space-y-2">
-                  {announcement.files.map((file) => (
-                    <a
-                      key={file.id}
-                      href={file.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-green-400/20 backdrop-blur-sm rounded-lg p-3 flex items-center justify-between hover:bg-green-400/30 transition-all duration-200 border border-green-400/30"
-                      {...(file.isDownloadable ? { download: file.name } : {})}
-                    >
-                      <div className="flex items-center space-x-3 flex-1 min-w-0">
-                        <div className="flex-shrink-0">
-                          {getFileIcon(file.type)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-green-50 truncate">
-                            {file.name}
-                          </p>
-                          <p className="text-xs text-green-200">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2 flex-shrink-0 ml-3">
-                                                {file.isDownloadable ? (
-                          <Download className="h-4 w-4 text-green-200" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-green-200" />
-                        )}
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Message Footer */}
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-green-400/30">
-            <div className="flex items-center space-x-2 text-xs text-green-200">
-              <Clock className="h-3 w-3" />
-              <span title={formatFullDateTime(announcement.createdAt)}>
+    <Card className="bg-white shadow-sm hover:shadow-md transition-shadow duration-200">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="flex-1 space-y-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="font-medium">
+                {groupNames}
+              </Badge>
+              <span className="text-xs text-muted-foreground">•</span>
+              <span
+                className="text-xs text-muted-foreground font-medium"
+                title={formatFullDateTime(announcement.createdAt)}
+              >
                 {formatTime(announcement.createdAt)}
               </span>
             </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs text-green-200">
-                {announcement.viewCount} view{announcement.viewCount !== 1 ? 's' : ''}
-              </span>
-              <CheckCheck className="h-4 w-4 text-green-200" />
+            <CardTitle className="text-lg sm:text-xl leading-tight text-gray-900">
+              {announcement.title}
+            </CardTitle>
+          </div>
+          <div className="flex items-center gap-2">
+            {canViewUsers && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onView(announcement.id, announcement.title)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Users className="h-4 w-4 mr-2" />
+                View
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(announcement.id)}
+              disabled={deleteLoading === announcement.id}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              {deleteLoading === announcement.id ? (
+                <div className="h-4 w-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="prose prose-sm max-w-none">
+          {announcement.content}
+        </div>
+        {announcement.files && announcement.files.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium text-gray-900">Attachments</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {announcement.files.map((file, index) => (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-2 p-2 rounded-lg border bg-gray-50"
+                >
+                  {getFileIcon(file.type)}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {file.name}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {formatFileSize(file.size)}
+                    </p>
+                  </div>
+                  {file.isDownloadable && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-blue-600 hover:text-blue-700"
+                      onClick={() => window.open(file.url, "_blank")}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-
-        {/* Sender Info */}
-        <div className="flex items-center justify-end mt-2 mr-2">
-          <div className="flex items-center space-x-2">
-            <span className="text-xs text-gray-500 font-medium">You</span>
-            <Avatar className="h-7 w-7 border-2 border-white shadow-sm">
-              <AvatarImage src={user?.profileImage} />
-              <AvatarFallback className="text-xs bg-green-100 text-green-700">
-                {user?.name ? user.name.charAt(0).toUpperCase() : "A"}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        </div>
-      </div>
-    </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -574,7 +498,7 @@ export default function AnnouncementsPage() {
   const [formData, setFormData] = useState({
     title: "",
     content: "",
-    groupId: "",
+    groupIds: [] as string[],
   })
   const [files, setFiles] = useState<File[]>([])
   const [filePermissions, setFilePermissions] = useState<Record<string, boolean>>({})
@@ -606,11 +530,13 @@ export default function AnnouncementsPage() {
       setFilteredAnnouncements(announcements)
     } else {
       const filtered = announcements.filter((announcement) => {
-        const groupName = groups.find((g) => g.id === announcement.groupId)?.name || ""
+        const groupNames = announcement.groupIds
+          .map(id => groups.find(g => g.id === id)?.name || "")
+          .join(" ")
         return (
           announcement.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           announcement.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          groupName.toLowerCase().includes(searchQuery.toLowerCase())
+          groupNames.toLowerCase().includes(searchQuery.toLowerCase())
         )
       })
       setFilteredAnnouncements(filtered)
@@ -658,7 +584,7 @@ export default function AnnouncementsPage() {
   }
 
   const resetForm = () => {
-    setFormData({ title: "", content: "", groupId: "" })
+    setFormData({ title: "", content: "", groupIds: [] })
     setFiles([])
     setFilePermissions({})
     setUploadProgress({})
@@ -706,8 +632,8 @@ export default function AnnouncementsPage() {
       return
     }
 
-    if (!formData.groupId) {
-      setError("Please select a group.")
+    if (formData.groupIds.length === 0) {
+      setError("Please select at least one group.")
       return
     }
 
@@ -746,7 +672,7 @@ export default function AnnouncementsPage() {
       const announcementData = {
         title: formData.title.trim() || "New Announcement",
         content: formData.content.trim(),
-        groupId: formData.groupId,
+        groupIds: formData.groupIds,
         createdBy: user.id,
         files: uploadedFiles,
         viewCount: 0,
@@ -776,7 +702,7 @@ export default function AnnouncementsPage() {
           const response = await fetch('/api/check-notification-status', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ announcementId, groupId: formData.groupId }),
+            body: JSON.stringify({ announcementId, groupIds: formData.groupIds }),
           })
           
           if (response.ok) {
@@ -949,34 +875,38 @@ export default function AnnouncementsPage() {
 
                       {/* Group Selection */}
                       <div className="space-y-2">
-                        <Label htmlFor="groupId" className="text-sm font-medium flex items-center gap-2">
+                        <Label htmlFor="groups" className="text-sm font-medium flex items-center gap-2">
                           <Users className="h-4 w-4 text-gray-500" />
-                          Send to Group *
+                          Select Groups *
                         </Label>
-                        <Select
-                          value={formData.groupId}
-                          onValueChange={(value) => setFormData((prev) => ({ ...prev, groupId: value }))}
-                        >
-                          <SelectTrigger className="border-gray-200 focus:border-green-500">
-                            <SelectValue placeholder="Choose a group to send to..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {groups.length === 0 ? (
-                              <SelectItem value="" disabled>
-                                No groups available
-                              </SelectItem>
-                            ) : (
-                              groups.map((group) => (
-                                <SelectItem key={group.id} value={group.id}>
-                                  <div className="flex items-center gap-2">
-                                    <Hash className="h-4 w-4 text-gray-400" />
-                                    {group.name}
-                                  </div>
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {groups.map((group) => (
+                            <div key={group.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`group-${group.id}`}
+                                checked={formData.groupIds.includes(group.id)}
+                                onCheckedChange={(checked) => {
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    groupIds: checked
+                                      ? [...prev.groupIds, group.id]
+                                      : prev.groupIds.filter((id) => id !== group.id),
+                                  }))
+                                }}
+                                disabled={formLoading}
+                              />
+                              <Label
+                                htmlFor={`group-${group.id}`}
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                {group.name}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                        {formData.groupIds.length === 0 && (
+                          <p className="text-xs text-red-500 mt-1">Please select at least one group</p>
+                        )}
                       </div>
 
                       {/* Title Input */}
@@ -1015,7 +945,7 @@ export default function AnnouncementsPage() {
                         </p>
                       </div>
 
-                                            {/* Enhanced File Upload */}
+                      {/* Enhanced File Upload */}
                       <FileUploadArea
                         files={files}
                         filePermissions={filePermissions}
@@ -1055,7 +985,7 @@ export default function AnnouncementsPage() {
                               Email Notifications
                             </h4>
                             <p className="text-sm text-gray-600">
-                              All students in the selected group will receive an email notification with your message and any attachments.
+                              All students in the selected groups will receive an email notification with your message and any attachments.
                             </p>
                           </div>
                         </div>
@@ -1074,7 +1004,7 @@ export default function AnnouncementsPage() {
                         </Button>
                         <Button
                           type="submit"
-                          disabled={formLoading || !formData.content.trim() || !formData.groupId || groups.length === 0}
+                          disabled={formLoading || !formData.content.trim() || formData.groupIds.length === 0 || groups.length === 0}
                           className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg"
                         >
                           {formLoading ? (

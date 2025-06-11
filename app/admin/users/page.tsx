@@ -105,6 +105,14 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [bulkSearchEmails, setBulkSearchEmails] = useState("")
+  const [bulkSearchResults, setBulkSearchResults] = useState<{
+    inGroups: User[];
+    notInGroups: User[];
+  }>({ inGroups: [], notInGroups: [] })
+  const [bulkGroupDialogOpen, setBulkGroupDialogOpen] = useState(false)
+  const [selectedBulkGroups, setSelectedBulkGroups] = useState<string[]>([])
+  const [bulkAssigning, setBulkAssigning] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -288,6 +296,51 @@ export default function UsersPage() {
 
   const hasActiveFilters = searchTerm || roleFilter !== "all" || statusFilter !== "all"
 
+  const handleBulkSearch = () => {
+    const emailList = bulkSearchEmails.split(',').map(email => email.trim().toLowerCase())
+    const matchedUsers = users.filter(user => emailList.includes(user.email.toLowerCase()))
+    
+    const inGroups = matchedUsers.filter(user => user.assignedGroups && user.assignedGroups.length > 0)
+    const notInGroups = matchedUsers.filter(user => !user.assignedGroups || user.assignedGroups.length === 0)
+    
+    setBulkSearchResults({ inGroups, notInGroups })
+  }
+
+  const handleBulkGroupAssignment = async () => {
+    if (!currentUser || selectedBulkGroups.length === 0) return
+    
+    setBulkAssigning(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const promises = bulkSearchResults.notInGroups.map(user => 
+        assignUserToGroups(user.id, selectedBulkGroups, currentUser.id)
+      )
+      
+      await Promise.all(promises)
+      
+      // Update local state
+      setUsers(prev => prev.map(user => {
+        if (bulkSearchResults.notInGroups.some(u => u.id === user.id)) {
+          return { ...user, assignedGroups: selectedBulkGroups }
+        }
+        return user
+      }))
+
+      setSuccess(`Successfully assigned ${bulkSearchResults.notInGroups.length} users to selected groups.`)
+      setBulkGroupDialogOpen(false)
+      setSelectedBulkGroups([])
+      setBulkSearchResults({ inGroups: [], notInGroups: [] })
+      setBulkSearchEmails("")
+    } catch (error: any) {
+      console.error("Error assigning groups:", error)
+      setError(error.message || "Failed to assign groups.")
+    } finally {
+      setBulkAssigning(false)
+    }
+  }
+
   if (loading) {
     return (
       <ProtectedRoute allowedRoles={["super_admin", "admin"]}>
@@ -467,6 +520,165 @@ export default function UsersPage() {
               </CardContent>
             </Card>
 
+            {/* Bulk Group Assignment Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Bulk Group Assignment</CardTitle>
+                <CardDescription>
+                  Search users by email and assign them to groups in bulk
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-3">
+                  <Input
+                    placeholder="Enter emails separated by commas..."
+                    value={bulkSearchEmails}
+                    onChange={(e) => setBulkSearchEmails(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button onClick={handleBulkSearch}>
+                    Search
+                  </Button>
+                </div>
+
+                {(bulkSearchResults.inGroups.length > 0 || bulkSearchResults.notInGroups.length > 0) && (
+                  <div className="space-y-6">
+                    {/* Users in Groups Table */}
+                    {bulkSearchResults.inGroups.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-sm">Users in Groups ({bulkSearchResults.inGroups.length})</h4>
+                        </div>
+                        <div className="border rounded-lg overflow-hidden">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="bg-gray-50 border-b">
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Groups</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {bulkSearchResults.inGroups.map(user => (
+                                <tr key={user.id} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="flex items-center gap-2">
+                                      <Avatar className="h-8 w-8">
+                                        <AvatarImage src={user.profileImage || "/placeholder.svg"} />
+                                        <AvatarFallback className="text-sm bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                                          {user.name.charAt(0).toUpperCase()}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span className="font-medium">{user.name}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                    {user.email}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <Badge className={`${getRoleColor(user.role)} border flex items-center gap-1`}>
+                                      {getRoleIcon(user.role)}
+                                      <span className="text-xs">{getRoleDisplayName(user.role)}</span>
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex flex-wrap gap-1">
+                                      {user.assignedGroups?.map(groupId => {
+                                        const group = groups.find(g => g.id === groupId)
+                                        return group ? (
+                                          <Badge key={groupId} variant="outline" className="text-xs">
+                                            {group.name}
+                                          </Badge>
+                                        ) : null
+                                      })}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Users not in Groups Table */}
+                    {bulkSearchResults.notInGroups.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-medium text-sm">
+                            Users not in Groups ({bulkSearchResults.notInGroups.length})
+                          </h4>
+                          <Button
+                            size="sm"
+                            onClick={() => setBulkGroupDialogOpen(true)}
+                          >
+                            Assign to Groups
+                          </Button>
+                        </div>
+                        <div className="border rounded-lg overflow-hidden">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="bg-gray-50 border-b">
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {bulkSearchResults.notInGroups.map(user => (
+                                <tr key={user.id} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="flex items-center gap-2">
+                                      <Avatar className="h-8 w-8">
+                                        <AvatarImage src={user.profileImage || "/placeholder.svg"} />
+                                        <AvatarFallback className="text-sm bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                                          {user.name.charAt(0).toUpperCase()}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span className="font-medium">{user.name}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                    {user.email}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <Badge className={`${getRoleColor(user.role)} border flex items-center gap-1`}>
+                                      {getRoleIcon(user.role)}
+                                      <span className="text-xs">{getRoleDisplayName(user.role)}</span>
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <Badge 
+                                      variant={user.isApproved ? "default" : "secondary"}
+                                      className={user.isApproved ? "bg-green-100 text-green-800" : ""}
+                                    >
+                                      {user.isApproved ? (
+                                        <>
+                                          <CheckCircle className="h-3 w-3 mr-1" />
+                                          Approved
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Clock className="h-3 w-3 mr-1" />
+                                          Pending
+                                        </>
+                                      )}
+                                    </Badge>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Users List */}
             {filteredUsers.length === 0 ? (
               <Card>
@@ -491,92 +703,52 @@ export default function UsersPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {filteredUsers.map((user) => (
-                  <Card 
-                    key={user.id} 
-                    className="overflow-hidden hover:shadow-lg transition-all duration-200 group"
-                  >
-                    <div className="p-4 sm:p-6">
-                      {/* User Header */}
-                      <div className="flex items-start justify-between gap-4 mb-4">
-                        <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
-                          <Avatar className="h-12 w-12 sm:h-14 sm:w-14 flex-shrink-0">
-                            <AvatarImage src={user.profileImage || "/placeholder.svg"} />
-                            <AvatarFallback className="text-base sm:text-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                              {user.name.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="font-semibold text-base sm:text-lg truncate">
-                                {user.name}
-                              </h3>
-                              {user.id === currentUser?.id && (
-                                <Badge variant="secondary" className="text-xs">
-                                  You
-                                </Badge>
-                              )}
-                            </div>
-                            
-                            <div className="mt-1 space-y-1">
-                              <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                                {user.email}
-                              </p>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 border-b">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Groups</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registration</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-gray-50 group">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={user.profileImage || "/placeholder.svg"} />
+                              <AvatarFallback className="text-base bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                                {user.name.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium">{user.name}</p>
+                                {user.id === currentUser?.id && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    You
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground">{user.email}</p>
                               {user.mobileNumber && (
-                                <p className="text-xs sm:text-sm text-muted-foreground">
-                                  {user.mobileNumber}
-                                </p>
+                                <p className="text-sm text-muted-foreground">{user.mobileNumber}</p>
                               )}
                             </div>
                           </div>
-                        </div>
-
-                        {/* Action Menu - Desktop */}
-                        <div className="hidden sm:block">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => handleEditUser(user)}>
-                                <Edit className="h-4 w-4 mr-2" />
-                                Edit User
-                              </DropdownMenuItem>
-                              {user.id !== currentUser?.id && (
-                                <DropdownMenuItem 
-                                  className="text-red-600"
-                                  onClick={() => {
-                                    // Open delete dialog
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete User
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-
-                      {/* User Info */}
-                      <div className="space-y-3">
-                        {/* Role and Status */}
-                        <div className="flex items-center gap-2 flex-wrap">
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <Badge className={`${getRoleColor(user.role)} border flex items-center gap-1`}>
                             {getRoleIcon(user.role)}
                             <span className="text-xs">{getRoleDisplayName(user.role)}</span>
                           </Badge>
-                          
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <Badge 
                             variant={user.isApproved ? "default" : "secondary"}
                             className={user.isApproved ? "bg-green-100 text-green-800" : ""}
@@ -593,143 +765,89 @@ export default function UsersPage() {
                               </>
                             )}
                           </Badge>
-
-                          <span className="text-xs text-muted-foreground ml-auto">
-                            <Calendar className="h-3 w-3 inline mr-1" />
-                            {user.registrationDate instanceof Date
-                              ? user.registrationDate.toLocaleDateString()
-                              : "Unknown"}
-                          </span>
-                        </div>
-
-                        {/* Groups */}
-                        {user.assignedGroups && user.assignedGroups.length > 0 && (
-                          <div>
-                            <p className="text-xs font-medium text-muted-foreground mb-2">
-                              Assigned Groups ({user.assignedGroups.length})
-                            </p>
-                            <div className="flex flex-wrap gap-1">
-                              {user.assignedGroups.slice(0, 3).map((groupId) => {
-                                const group = groups.find((g) => g.id === groupId)
-                                return group ? (
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {user.assignedGroups && user.assignedGroups.length > 0 ? (
+                              <>
+                                {user.assignedGroups.slice(0, 3).map((groupId) => {
+                                  const group = groups.find((g) => g.id === groupId)
+                                  return group ? (
+                                    <Badge 
+                                      key={groupId} 
+                                      variant="outline" 
+                                      className="text-xs"
+                                    >
+                                      {group.name}
+                                    </Badge>
+                                  ) : null
+                                })}
+                                {user.assignedGroups.length > 3 && (
                                   <Badge 
-                                    key={groupId} 
                                     variant="outline" 
-                                    className="text-xs px-2 py-0.5"
+                                    className="text-xs"
                                   >
-                                    {group.name}
+                                    +{user.assignedGroups.length - 3} more
                                   </Badge>
-                                ) : null
-                              })}
-                              {user.assignedGroups.length > 3 && (
-                                <Badge 
-                                  variant="outline" 
-                                  className="text-xs px-2 py-0.5"
-                                >
-                                  +{user.assignedGroups.length - 3} more
-                                </Badge>
-                              )}
-                            </div>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">No groups</span>
+                            )}
                           </div>
-                        )}
-
-                        {/* Mobile Actions */}
-                        <div className="flex gap-2 sm:hidden pt-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1"
-                            onClick={() => handleEditUser(user)}
-                          >
-                            <Settings className="h-4 w-4 mr-2" />
-                            Manage
-                          </Button>
-                          {user.id !== currentUser?.id && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete User</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete {user.name}? This action cannot be undone and will
-                                    remove all their data from the platform.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeleteUser(user.id, user.name)}
-                                    className="bg-red-600 hover:bg-red-700"
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
+                          {user.registrationDate instanceof Date
+                            ? user.registrationDate.toLocaleDateString()
+                            : "Unknown"}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditUser(user)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                            {user.id !== currentUser?.id && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
                                   >
-                                    Delete User
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Desktop Actions - Alternative Layout */}
-                    <div className="hidden sm:flex items-center justify-between px-6 py-3 bg-gray-50 border-t">
-                      <span className="text-sm text-muted-foreground">
-                        Last active: {user.registrationDate instanceof Date 
-                          ? `${Math.floor((new Date().getTime() - user.registrationDate.getTime()) / (1000 * 60 * 60 * 24))} days ago`
-                          : "Unknown"}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditUser(user)}
-                        >
-                          <Settings className="h-4 w-4 mr-2" />
-                          Manage
-                        </Button>
-                        {user.id !== currentUser?.id && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete User</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete {user.name}? This action cannot be undone and will
-                                  remove all their data from the platform.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteUser(user.id, user.name)}
-                                  className="bg-red-600 hover:bg-red-700"
-                                >
-                                  Delete User
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete User</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete {user.name}? This action cannot be undone and will
+                                      remove all their data from the platform.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteUser(user.id, user.name)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Delete User
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
 
@@ -896,6 +1014,100 @@ export default function UsersPage() {
                     </div>
                   </div>
                 )}
+              </DialogContent>
+            </Dialog>
+
+            {/* Bulk Group Assignment Dialog */}
+            <Dialog open={bulkGroupDialogOpen} onOpenChange={setBulkGroupDialogOpen}>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Assign Users to Groups</DialogTitle>
+                  <DialogDescription>
+                    Select groups to assign to {bulkSearchResults.notInGroups.length} users
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <div className="border rounded-lg p-4 max-h-64 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {groups.map((group) => (
+                        <label
+                          key={group.id}
+                          className="flex items-start space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded-md transition-colors"
+                        >
+                          <Checkbox
+                            id={`bulk-group-${group.id}`}
+                            checked={selectedBulkGroups.includes(group.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedBulkGroups(prev => [...prev, group.id])
+                              } else {
+                                setSelectedBulkGroups(prev => prev.filter(id => id !== group.id))
+                              }
+                            }}
+                            className="mt-0.5"
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium leading-none">
+                              {group.name}
+                            </p>
+                            {group.description && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                {group.description}
+                              </p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">
+                      {selectedBulkGroups.length} group{selectedBulkGroups.length !== 1 ? 's' : ''} selected
+                    </span>
+                    {selectedBulkGroups.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedBulkGroups([])}
+                        className="h-auto p-1 text-xs"
+                      >
+                        Clear all
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <Button 
+                      onClick={handleBulkGroupAssignment} 
+                      disabled={bulkAssigning || selectedBulkGroups.length === 0} 
+                      className="flex-1"
+                    >
+                      {bulkAssigning ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                          Assigning...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Assign to Selected Groups
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setBulkGroupDialogOpen(false)
+                        setSelectedBulkGroups([])
+                      }}
+                      disabled={bulkAssigning}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
               </DialogContent>
             </Dialog>
           </div>
