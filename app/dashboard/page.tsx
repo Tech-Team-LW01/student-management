@@ -50,6 +50,27 @@ import { Progress } from "@/components/ui/progress"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
+// Simple linkify function to convert URLs in text to clickable links
+function linkify(text: string) {
+  const urlRegex = /((https?:\/\/[^\s]+))/g
+  const parts = text.split(urlRegex)
+  return parts.map((part, i) =>
+    urlRegex.test(part) ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 underline break-all"
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  )
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const router = useRouter()
@@ -634,7 +655,7 @@ return (
                       <CardContent className="space-y-6">
                         <div className="prose prose-sm max-w-none">
                           <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                            {announcement.content}
+                              {linkify(announcement.content)}
                           </p>
                         </div>
 

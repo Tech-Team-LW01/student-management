@@ -39,4 +39,5 @@ export interface Announcement {
     url: string
     type: string
   }[]
+  
 } 

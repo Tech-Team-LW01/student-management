@@ -416,7 +416,7 @@ const MessageBubble = ({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="prose prose-sm max-w-none">
-          {announcement.content}
+            {linkify(announcement.content)}
         </div>
         {announcement.files && announcement.files.length > 0 && (
           <div className="space-y-2">
@@ -482,6 +482,27 @@ const AnnouncementSkeleton = () => (
     </div>
   </div>
 )
+
+function linkify(text: string) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+  const parts = text.split(urlRegex);
+  return parts.map((part, index) =>
+    urlRegex.test(part) ? (
+      <a
+        key={index}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 underline hover:text-blue-800"
+      >
+        {part}
+      </a>
+    ) : (
+      <span key={index}>{part}</span>
+    )
+  );
+}
 
 export default function AnnouncementsPage() {
   const { user } = useAuth()
@@ -833,196 +854,182 @@ export default function AnnouncementsPage() {
                 </div>
                 
                 {/* Enhanced Create Button */}
-                <Dialog
-                  open={isCreateDialogOpen}
-                  onOpenChange={(open) => {
-                    setIsCreateDialogOpen(open)
-                    if (!open) resetForm()
-                  }}
-                >
-                  <DialogTrigger asChild>
-                    <Button 
-                      className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all duration-200"
-                      size="lg"
-                    >
-                      <Plus className="mr-2 h-5 w-5" />
-                      <span className="hidden sm:inline">New Message</span>
-                      <span className="sm:hidden">New</span>
-                    </Button>
-                  </DialogTrigger>
-                  
-                  {/* Enhanced Create Dialog */}
-                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader className="pb-4">
-                      <DialogTitle className="flex items-center gap-3 text-xl">
-                        <div className="p-2 bg-green-100 rounded-lg">
-                          <Send className="h-5 w-5 text-green-600" />
-                        </div>
-                        Send New Announcement
-                      </DialogTitle>
-                      <DialogDescription className="text-gray-600">
-                        Create and share a message with your group. Students will receive email notifications automatically.
-                      </DialogDescription>
-                    </DialogHeader>
-                    
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                      {error && (
-                        <Alert variant="destructive" className="border-red-200 bg-red-50">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription className="text-red-800">{error}</AlertDescription>
-                        </Alert>
-                      )}
+          <Dialog
+            open={isCreateDialogOpen}
+            onOpenChange={(open) => {
+              setIsCreateDialogOpen(open)
+              if (!open) resetForm()
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button 
+                className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg hover:shadow-xl transition-all duration-200"
+                size="lg"
+              >
+                <Plus className="mr-2 h-5 w-5" />
+                <span className="hidden sm:inline">New Message</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+            </DialogTrigger>
+            
+            {/* Enhanced Create Dialog */}
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader className="pb-4">
+                <DialogTitle className="flex items-center gap-3 text-xl">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <Send className="h-5 w-5 text-green-600" />
+                  </div>
+                  Send New Announcement
+                </DialogTitle>
+                <DialogDescription className="text-gray-600">
+                  Create and share a message with your group. Students will receive email notifications automatically.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {error && (
+                  <Alert variant="destructive" className="border-red-200 bg-red-50">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-red-800">{error}</AlertDescription>
+                  </Alert>
+                )}
 
-                      {/* Group Selection */}
-                      <div className="space-y-2">
-                        <Label htmlFor="groups" className="text-sm font-medium flex items-center gap-2">
-                          <Users className="h-4 w-4 text-gray-500" />
-                          Select Groups *
-                        </Label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {groups.map((group) => (
-                            <div key={group.id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`group-${group.id}`}
-                                checked={formData.groupIds.includes(group.id)}
-                                onCheckedChange={(checked) => {
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    groupIds: checked
-                                      ? [...prev.groupIds, group.id]
-                                      : prev.groupIds.filter((id) => id !== group.id),
-                                  }))
-                                }}
-                                disabled={formLoading}
-                              />
-                              <Label
-                                htmlFor={`group-${group.id}`}
-                                className="text-sm font-normal cursor-pointer"
-                              >
-                                {group.name}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                        {formData.groupIds.length === 0 && (
-                          <p className="text-xs text-red-500 mt-1">Please select at least one group</p>
-                        )}
-                      </div>
-
-                      {/* Title Input */}
-                      <div className="space-y-2">
-                        <Label htmlFor="title" className="text-sm font-medium">
-                          Title (Optional)
-                        </Label>
-                        <Input
-                          id="title"
-                          value={formData.title}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
-                          placeholder="Enter a title for your announcement..."
+                {/* Group Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="groups" className="text-sm font-medium flex items-center gap-2">
+                    <Users className="h-4 w-4 text-gray-500" />
+                    Select Groups *
+                  </Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {groups.map((group) => (
+                      <div key={group.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`group-${group.id}`}
+                          checked={formData.groupIds.includes(group.id)}
+                          onCheckedChange={(checked) => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              groupIds: checked
+                                ? [...prev.groupIds, group.id]
+                                : prev.groupIds.filter((id) => id !== group.id),
+                            }))
+                          }}
                           disabled={formLoading}
-                          className="border-gray-200 focus:border-green-500"
                         />
-                      </div>
-
-                      {/* Message Content */}
-                      <div className="space-y-2">
-                        <Label htmlFor="content" className="text-sm font-medium flex items-center gap-2">
-                          <MessageSquare className="h-4 w-4 text-gray-500" />
-                          Message *
+                        <Label
+                          htmlFor={`group-${group.id}`}
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          {group.name}
                         </Label>
-                        <Textarea
-                          id="content"
-                          value={formData.content}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
-                          required
-                          placeholder="Type your message here..."
-                          rows={6}
-                          disabled={formLoading}
-                          className="resize-none border-gray-200 focus:border-green-500"
-                        />
-                        <p className="text-xs text-gray-500">
-                          Use line breaks to format your message. Recipients will see it exactly as you type it.
-                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Message Content */}
+                <div className="space-y-2">
+                  <Label htmlFor="content" className="text-sm font-medium flex items-center gap-2">
+                    <div className="whitespace-pre-wrap text-gray-800">
+                       {linkify(formData.content)}
                       </div>
 
-                      {/* Enhanced File Upload */}
-                      <FileUploadArea
-                        files={files}
-                        filePermissions={filePermissions}
-                        onFileChange={handleFileChange}
-                        onPermissionChange={handleFilePermissionChange}
-                        onRemoveFile={handleRemoveFile}
-                        loading={formLoading}
-                      />
+                    <MessageSquare className="h-4 w-4 text-gray-500" />
+                    Message *
+                  </Label>
+                  <Textarea
+                    id="content"
+                    value={formData.content}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
+                    required
+                    placeholder="Type your message here..."
+                    rows={6}
+                    disabled={formLoading}
+                    className="resize-none border-gray-200 focus:border-green-500"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Use line breaks to format your message. Recipients will see it exactly as you type it.
+                  </p>
+                </div>
 
-                      {/* Upload Progress */}
-                      {formLoading && files.length > 0 && (
-                        <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                          <div className="flex items-center gap-2 text-blue-800">
-                            <Upload className="h-4 w-4" />
-                            <span className="text-sm font-medium">Uploading files...</span>
-                          </div>
-                          {Object.entries(uploadProgress).map(([fileName, progress]) => (
-                            <div key={fileName} className="space-y-1">
-                              <div className="flex justify-between text-xs text-blue-700">
-                                <span className="truncate">{fileName}</span>
-                                <span>{progress}%</span>
-                              </div>
-                              <Progress value={progress} className="h-2" />
-                            </div>
-                          ))}
+                {/* Enhanced File Upload */}
+                <FileUploadArea
+                  files={files}
+                  filePermissions={filePermissions}
+                  onFileChange={handleFileChange}
+                  onPermissionChange={handleFilePermissionChange}
+                  onRemoveFile={handleRemoveFile}
+                  loading={formLoading}
+                />
+
+                {/* Upload Progress */}
+                {formLoading && files.length > 0 && (
+                  <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2 text-blue-800">
+                      <Upload className="h-4 w-4" />
+                      <span className="text-sm font-medium">Uploading files...</span>
+                    </div>
+                    {Object.entries(uploadProgress).map(([fileName, progress]) => (
+                      <div key={fileName} className="space-y-1">
+                        <div className="flex justify-between text-xs text-blue-700">
+                          <span className="truncate">{fileName}</span>
+                          <span>{progress}%</span>
                         </div>
-                      )}
-
-                      {/* Email Notification Info */}
-                      <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-xl p-4">
-                        <div className="flex items-start space-x-3">
-                          <div className="p-2 bg-white rounded-lg shadow-sm">
-                            <Mail className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="text-sm font-medium text-gray-900 mb-1">
-                              Email Notifications
-                            </h4>
-                            <p className="text-sm text-gray-600">
-                              All students in the selected groups will receive an email notification with your message and any attachments.
-                            </p>
-                          </div>
-                        </div>
+                        <Progress value={progress} className="h-2" />
                       </div>
+                    ))}
+                  </div>
+                )}
 
-                      {/* Action Buttons */}
-                      <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setIsCreateDialogOpen(false)}
-                          disabled={formLoading}
-                          className="flex-1 border-gray-200"
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          type="submit"
-                          disabled={formLoading || !formData.content.trim() || formData.groupIds.length === 0 || groups.length === 0}
-                          className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg"
-                        >
-                          {formLoading ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              <span>Sending...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Send className="h-4 w-4 mr-2" />
-                              <span>Send Message</span>
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
-                </Dialog>
+                {/* Email Notification Info */}
+                <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-xl p-4">
+                  <div className="flex items-start space-x-3">
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <Mail className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-gray-900 mb-1">
+                        Email Notifications
+                      </h4>
+                      <p className="text-sm text-gray-600">
+                        All students in the selected groups will receive an email notification with your message and any attachments.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsCreateDialogOpen(false)}
+                    disabled={formLoading}
+                    className="flex-1 border-gray-200"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={formLoading || !formData.content.trim() || formData.groupIds.length === 0 || groups.length === 0}
+                    className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-lg"
+                  >
+                    {formLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        <span>Sending...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" />
+                        <span>Send Message</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
               </div>
             </div>
           </div>

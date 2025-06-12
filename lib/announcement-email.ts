@@ -1,6 +1,19 @@
 // lib/announcement-email.ts
 import nodemailer from 'nodemailer';
 
+/**
+ * Converts URLs in plain text to clickable HTML links.
+ * Very basic implementation for email-safe linkification.
+ */
+function linkify(text: string): string {
+  if (!text) return '';
+  // Regex to match URLs (http/https)
+  return text.replace(
+    /((https?:\/\/)[^\s<]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+  );
+}
+
 // Create reusable transporter for Gmail
 const createGmailTransporter = () => {
   if (!process.env.GMAIL_EMAIL || !process.env.GMAIL_APP_PASSWORD) {
@@ -241,7 +254,7 @@ export async function sendAnnouncementEmail(
             
             <h2 class="announcement-title">${announcement.title || 'New Announcement'}</h2>
             
-            <div class="announcement-content">${announcement.content}</div>
+            <div class="announcement-content">${linkify(announcement.content)}</div>
             
             ${announcement.files.length > 0 ? `
               <div class="files-section">

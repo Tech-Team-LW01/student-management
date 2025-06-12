@@ -37,6 +37,20 @@ interface AnalyticsData {
   recentAnnouncements: number
 }
 
+function linkify(text: string) {
+  // Simple regex to find URLs and wrap them in <a> tags
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  return text.split(urlRegex).map((part, i) =>
+    urlRegex.test(part) ? (
+      <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  )
+}
+
 export default function AdminDashboardPage() {
   const { user } = useAuth()
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
@@ -324,7 +338,7 @@ export default function AdminDashboardPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="prose prose-sm max-w-none">
-                        <p className="whitespace-pre-wrap">{announcement.content}</p>
+                        <p className="whitespace-pre-wrap">  {linkify(announcement.content)}</p>
                       </div>
                       {announcement.files && announcement.files.length > 0 && (
                         <div className="space-y-2">
