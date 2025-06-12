@@ -895,11 +895,31 @@ export default function AnnouncementsPage() {
                 )}
 
                 {/* Group Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="groups" className="text-sm font-medium flex items-center gap-2">
-                    <Users className="h-4 w-4 text-gray-500" />
-                    Select Groups *
-                  </Label>
+               <div className="space-y-2">
+  <Label htmlFor="groups" className="text-sm font-medium flex items-center gap-2">
+    <Users className="h-4 w-4 text-gray-500" />
+    Select Groups *
+  </Label>
+
+  {/* Select All Checkbox */}
+  <div className="flex items-center space-x-2">
+    <Checkbox
+      id="select-all-groups"
+      checked={formData.groupIds.length === groups.length}
+      onCheckedChange={(checked) => {
+        setFormData((prev) => ({
+          ...prev,
+          groupIds: checked ? groups.map((group) => group.id) : [],
+        }));
+      }}
+      disabled={formLoading}
+    />
+    <Label htmlFor="select-all-groups" className="text-sm font-semibold cursor-pointer">
+      Select All Groups
+    </Label>
+  </div>
+
+                  {/* Group List */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {groups.map((group) => (
                       <div key={group.id} className="flex items-center space-x-2">
@@ -912,20 +932,18 @@ export default function AnnouncementsPage() {
                               groupIds: checked
                                 ? [...prev.groupIds, group.id]
                                 : prev.groupIds.filter((id) => id !== group.id),
-                            }))
+                            }));
                           }}
                           disabled={formLoading}
                         />
-                        <Label
-                          htmlFor={`group-${group.id}`}
-                          className="text-sm font-normal cursor-pointer"
-                        >
+                        <Label htmlFor={`group-${group.id}`} className="text-sm font-normal cursor-pointer">
                           {group.name}
                         </Label>
                       </div>
                     ))}
                   </div>
                 </div>
+
 
                 {/* Message Content */}
                 <div className="space-y-2">
