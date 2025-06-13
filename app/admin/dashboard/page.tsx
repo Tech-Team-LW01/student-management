@@ -23,6 +23,10 @@ import {
   GraduationCap,
   File,
   Download,
+  Save,
+  Edit,
+  X,
+  Trash2,
 } from "lucide-react"
 import { Timestamp } from "firebase/firestore"
 
@@ -59,6 +63,44 @@ export default function AdminDashboardPage() {
   const [announcementCreators, setAnnouncementCreators] = useState<{ [userId: string]: { name: string } }>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+
+  // State for editing announcements
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<{ title: string; content: string; groupIds: string[] }>({
+    title: "",
+    content: "",
+    groupIds: [],
+  })
+
+  // Handler to start editing an announcement
+  const handleEditStart = (announcement: Announcement) => {
+    setEditingId(announcement.id)
+    setEditForm({
+      title: announcement.title,
+      content: announcement.content,
+      groupIds: announcement.groupIds ?? [],
+    })
+  }
+
+  // Handler to save edited announcement (stub implementation)
+  const handleEditSave = (id: string) => {
+    // TODO: Implement save logic (e.g., update announcement in Firestore)
+    setEditingId(null)
+  }
+
+  // Handler to delete an announcement (stub implementation)
+  const handleDeleteAnnouncement = (id: string) => {
+    // TODO: Implement delete logic (e.g., remove announcement from Firestore)
+    setAnnouncements((prev) => prev.filter(a => a.id !== id))
+  }
+
+  // Handler to cancel editing an announcement
+  const handleEditCancel = () => {
+    setEditingId(null)
+  }
+
+  // Get current user (for edit/delete permissions)
+  const currentUser = user
 
   useEffect(() => {
     if (!user) return
@@ -313,72 +355,171 @@ export default function AdminDashboardPage() {
           </Card>
 
           {/* Announcements Section */}
-          <div className="space-y-6 mt-8">
-            <h2 className="text-xl font-semibold mb-4">All Announcements</h2>
-            {announcements.length === 0 ? (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <p className="text-muted-foreground">No announcements available.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-6">
-                {announcements.map((announcement) => (
-                  <Card key={announcement.id}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle>{announcement.title}</CardTitle>
-                          <CardDescription>
-                            Posted by {announcementCreators[announcement.createdBy]?.name || announcement.createdBy} on {formatDate(announcement.createdAt)}
-                          </CardDescription>
-                        </div>
-                        <Badge variant="outline">{announcement.groupIds?.length ?? 0} Groups</Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="prose prose-sm max-w-none">
-                        <p className="whitespace-pre-wrap">  {linkify(announcement.content)}</p>
-                      </div>
-                      {announcement.files && announcement.files.length > 0 && (
-                        <div className="space-y-2">
-                          <h4 className="text-sm font-medium">Attachments</h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                            {announcement.files.map((file, index) => (
-                              <div key={file.id || index} className="flex items-center gap-2 p-2 rounded-lg border bg-gray-50">
-                                <File className="h-5 w-5 text-muted-foreground" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
-                                  <p className="text-xs text-gray-500">{file.size ? (file.size / 1024 / 1024).toFixed(2) : "-"} MB</p>
-                                </div>
-                                <button
-                                  className="text-blue-600 hover:text-blue-700"
-                                  onClick={() => window.open(file.url, "_blank")}
-                                  title={file.isDownloadable ? "Download" : "View"}
-                                >
-                                  <Download className="h-4 w-4" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      <div className="flex flex-wrap gap-2">
-                        {(announcement.groupIds ?? []).map((groupId) => {
-                          const group = groups.find((g) => g.id === groupId)
-                          return (
-                            <Badge key={groupId} variant="secondary">
-                              {group?.name || groupId}
-                            </Badge>
-                          )
-                        })}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+     <div className="space-y-6 mt-8">
+  <h2 className="text-xl font-semibold mb-4">All Announcements</h2>
+  {announcements.length === 0 ? (
+    <Card>
+      <CardContent className="flex flex-col items-center justify-center py-12">
+        <p className="text-muted-foreground">No announcements available.</p>
+      </CardContent>
+    </Card>
+  ) : (
+    <div className="space-y-6">
+      {announcements.map((announcement) => (
+        <Card key={announcement.id}>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                {editingId === announcement.id ? (
+                  <input
+                    type="text"
+                    value={editForm.title}
+                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    className="text-xl font-semibold bg-transparent border-b border-gray-300 focus:border-blue-500 outline-none w-full mb-2"
+                    placeholder="Announcement title"
+                  />
+                ) : (
+                  <CardTitle>{announcement.title}</CardTitle>
+                )}
+                <CardDescription>
+                  Posted by {announcementCreators[announcement.createdBy]?.name || announcement.createdBy} on {formatDate(announcement.createdAt)}
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{announcement.groupIds?.length ?? 0} Groups</Badge>
+                {/* Only show edit options for admin/super admin */}
+                {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin') && (
+                  <div className="flex items-center gap-1">
+                    {editingId === announcement.id ? (
+                      <>
+                        <button
+                          onClick={() => handleEditSave(announcement.id)}
+                          className="p-1 rounded-md hover:bg-green-50 transition-colors"
+                          title="Save Changes"
+                        >
+                          <Save className="h-4 w-4 text-green-600" />
+                        </button>
+                        <button
+                          onClick={handleEditCancel}
+                          className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+                          title="Cancel Edit"
+                        >
+                          <X className="h-4 w-4 text-gray-600" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleEditStart(announcement)}
+                          className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+                          title="Edit Announcement"
+                        >
+                          <Edit className="h-4 w-4 text-gray-600" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAnnouncement(announcement.id)}
+                          className="p-1 rounded-md hover:bg-red-50 transition-colors"
+                          title="Delete Announcement"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="prose prose-sm max-w-none">
+              {editingId === announcement.id ? (
+                <textarea
+                  value={editForm.content}
+                  onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
+                  rows={6}
+                  className="w-full p-3 border border-gray-300 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-vertical"
+                  placeholder="Announcement content..."
+                />
+              ) : (
+                <p className="whitespace-pre-wrap">{linkify(announcement.content)}</p>
+              )}
+            </div>
+
+            {/* Group Selection for Edit Mode */}
+            {editingId === announcement.id && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Select Groups</h4>
+                <div className="flex flex-wrap gap-2">
+                  {groups.map((group) => (
+                    <label key={group.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={editForm.groupIds.includes(group.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEditForm({
+                              ...editForm,
+                              groupIds: [...editForm.groupIds, group.id]
+                            });
+                          } else {
+                            setEditForm({
+                              ...editForm,
+                              groupIds: editForm.groupIds.filter(id => id !== group.id)
+                            });
+                          }
+                        }}
+                        className="rounded"
+                      />
+                      <span className="text-sm">{group.name}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             )}
-          </div>
+
+            {announcement.files && announcement.files.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Attachments</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {announcement.files.map((file, index) => (
+                    <div key={file.id || index} className="flex items-center gap-2 p-2 rounded-lg border bg-gray-50">
+                      <File className="h-5 w-5 text-muted-foreground" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                        <p className="text-xs text-gray-500">{file.size ? (file.size / 1024 / 1024).toFixed(2) : "-"} MB</p>
+                      </div>
+                      <button
+                        className="text-blue-600 hover:text-blue-700"
+                        onClick={() => window.open(file.url, "_blank")}
+                        title={file.isDownloadable ? "Download" : "View"}
+                      >
+                        <Download className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Show selected groups only when not editing */}
+            {editingId !== announcement.id && (
+              <div className="flex flex-wrap gap-2">
+                {(announcement.groupIds ?? []).map((groupId) => {
+                  const group = groups.find((g) => g.id === groupId)
+                  return (
+                    <Badge key={groupId} variant="secondary">
+                      {group?.name || groupId}
+                    </Badge>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )}
+</div>
         </div>
       </MainLayout>
     </ProtectedRoute>
