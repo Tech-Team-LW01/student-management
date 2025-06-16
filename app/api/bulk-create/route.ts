@@ -26,6 +26,7 @@ export async function POST(request: Request) {
         const userId = await createUser({
           ...userData,
           password,
+          mode: userData.mode || "online",
         })
 
         // Assign user to selected groups if any

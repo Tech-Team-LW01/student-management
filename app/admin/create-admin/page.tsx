@@ -27,6 +27,7 @@ export default function CreateAdminPage() {
     role: "admin" as UserRole,
     mobileNumber: "",
     profileImage: "",
+    mode: "" as "" | "online" | "offline",
   })
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
@@ -78,6 +79,12 @@ export default function CreateAdminPage() {
       return
     }
 
+    if (!formData.mode) {
+      setError("Please select a batch mode")
+      setLoading(false)
+      return
+    }
+
     try {
       // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password)
@@ -90,6 +97,7 @@ export default function CreateAdminPage() {
         role: formData.role,
         mobileNumber: formData.mobileNumber || "",
         profileImage: formData.profileImage || "",
+        mode: formData.mode as "online" | "offline",
         registrationDate: serverTimestamp(),
         isApproved: true, // Admins are auto-approved
         assignedGroups: [],
@@ -111,6 +119,7 @@ export default function CreateAdminPage() {
         role: "admin",
         mobileNumber: "",
         profileImage: "",
+        mode: "",
       })
     } catch (err: any) {
       setError(err.message || "Failed to create admin account")
@@ -200,6 +209,24 @@ export default function CreateAdminPage() {
                       <SelectItem value="super_admin">Super Admin</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="mode">Batch Mode *</Label>
+                  <Select value={formData.mode} onValueChange={(value: "online" | "offline") => 
+                    setFormData(prev => ({ ...prev, mode: value }))
+                  }>
+                    <SelectTrigger className={!formData.mode ? "border-red-300 focus:border-red-500" : ""}>
+                      <SelectValue placeholder="Please select batch mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="online">Online Batch</SelectItem>
+                      <SelectItem value="offline">Offline Batch</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Select the batch mode for this admin account.
+                  </p>
                 </div>
 
                 <div className="space-y-2">

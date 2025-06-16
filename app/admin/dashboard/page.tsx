@@ -39,6 +39,9 @@ interface AnalyticsData {
   usersByRole: Record<string, number>
   recentUsers: number
   recentAnnouncements: number
+  onlineStudents: number
+  offlineStudents: number
+  studentsWithoutMode: number
 }
 
 function linkify(text: string) {
@@ -280,6 +283,56 @@ export default function AdminDashboardPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Mode Analytics */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Student Mode Distribution</CardTitle>
+              <CardDescription>Breakdown of students by their batch mode</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-blue-50 border-blue-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <div>
+                      <p className="font-medium text-blue-800">Online Students</p>
+                      <p className="text-sm text-blue-600">Remote learning mode</p>
+                    </div>
+                  </div>
+                  <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-lg font-bold">
+                    {analytics.onlineStudents}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-orange-50 border-orange-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                    <div>
+                      <p className="font-medium text-orange-800">Offline Students</p>
+                      <p className="text-sm text-orange-600">In-person learning mode</p>
+                    </div>
+                  </div>
+                  <Badge className="bg-orange-100 text-orange-800 border-orange-300 text-lg font-bold">
+                    {analytics.offlineStudents}
+                  </Badge>
+                </div>
+                {analytics.studentsWithoutMode > 0 && (
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+                      <div>
+                        <p className="font-medium text-gray-800">No Mode Set</p>
+                        <p className="text-sm text-gray-600">Needs assignment</p>
+                      </div>
+                    </div>
+                    <Badge className="bg-gray-100 text-gray-800 border-gray-300 text-lg font-bold">
+                      {analytics.studentsWithoutMode}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* User Roles Distribution */}
           <Card>

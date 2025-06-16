@@ -22,6 +22,13 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface UserCreationResult {
   email: string
@@ -41,6 +48,7 @@ export default function BulkCreatePage() {
   const [selectedGroups, setSelectedGroups] = useState<string[]>([])
   const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false)
   const [assigningGroups, setAssigningGroups] = useState(false)
+  const [selectedMode, setSelectedMode] = useState<"online" | "offline" | "">("")
 
   useEffect(() => {
     fetchGroups()
@@ -153,6 +161,12 @@ export default function BulkCreatePage() {
         return
       }
 
+      if (!selectedMode) {
+        setError("Please select a batch mode")
+        setLoading(false)
+        return
+      }
+
       // Call the API route
       const response = await fetch('/api/bulk-create', {
         method: 'POST',
@@ -164,6 +178,7 @@ export default function BulkCreatePage() {
             email,
             role: 'student',
             status: 'active',
+            mode: selectedMode as "online" | "offline",
             createdAt: new Date().toISOString(),
           })),
           selectedGroups: selectedGroups
@@ -292,6 +307,24 @@ export default function BulkCreatePage() {
                     onChange={(e) => setEmails(e.target.value)}
                     className="h-32"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Batch Mode *
+                  </label>
+                  <Select value={selectedMode} onValueChange={(value: "online" | "offline") => setSelectedMode(value)}>
+                    <SelectTrigger className={!selectedMode ? "border-red-300 focus:border-red-500" : ""}>
+                      <SelectValue placeholder="Please select batch mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="online">Online Batch</SelectItem>
+                      <SelectItem value="offline">Offline Batch</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    All users will be assigned to the selected batch mode.
+                  </p>
                 </div>
 
                 {error && (

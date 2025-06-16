@@ -1,7 +1,3 @@
-
-
-
-
 "use client"
 
 import type React from "react"
@@ -17,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { BookOpen, Upload, CheckCircle, Mail, ArrowLeft, RefreshCw, Loader2 } from "lucide-react"
 import Link from "next/link"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // OTP generation function
 function generateOTP(): string {
@@ -35,6 +32,7 @@ export default function SignUpPage() {
     confirmPassword: "",
     mobileNumber: "",
     profileImage: "",
+    mode: "" as "" | "online" | "offline",
   })
   
   // UI states
@@ -207,6 +205,11 @@ export default function SignUpPage() {
       return
     }
 
+    if (!formData.mode) {
+      setError("Please select a batch mode")
+      return
+    }
+
     // Send OTP
     setIsSendingOTP(true)
     try {
@@ -255,6 +258,7 @@ export default function SignUpPage() {
         name: formData.name,
         mobileNumber: formData.mobileNumber,
         profileImage: formData.profileImage,
+        mode: formData.mode as "online" | "offline",
         role: "student" as const,
       }
       
@@ -543,6 +547,24 @@ export default function SignUpPage() {
                 placeholder="Enter your mobile number"
                 autoComplete="tel"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="mode">Batch Mode *</Label>
+              <Select value={formData.mode} onValueChange={(value: "online" | "offline") => 
+                setFormData(prev => ({ ...prev, mode: value }))
+              }>
+                <SelectTrigger className={!formData.mode ? "border-red-300 focus:border-red-500" : ""}>
+                  <SelectValue placeholder="Please select your batch mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="online">Online Batch</SelectItem>
+                  <SelectItem value="offline">Offline Batch</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Please select your preferred learning mode. This can be changed later by an administrator.
+              </p>
             </div>
 
             <div className="space-y-2">

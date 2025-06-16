@@ -83,3 +83,219 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  /* Responsive text utilities */
+  .text-responsive-xs {
+    @apply text-xs sm:text-sm;
+  }
+  
+  .text-responsive-sm {
+    @apply text-sm sm:text-base;
+  }
+  
+  .text-responsive-base {
+    @apply text-base sm:text-lg;
+  }
+  
+  .text-responsive-lg {
+    @apply text-lg sm:text-xl;
+  }
+  
+  .text-responsive-xl {
+    @apply text-xl sm:text-2xl;
+  }
+  
+  .text-responsive-2xl {
+    @apply text-2xl sm:text-3xl;
+  }
+  
+  /* Responsive spacing utilities */
+  .space-responsive-sm {
+    @apply space-y-2 sm:space-y-3;
+  }
+  
+  .space-responsive-md {
+    @apply space-y-3 sm:space-y-4;
+  }
+  
+  .space-responsive-lg {
+    @apply space-y-4 sm:space-y-6;
+  }
+  
+  /* Responsive padding utilities */
+  .p-responsive-sm {
+    @apply p-2 sm:p-3;
+  }
+  
+  .p-responsive-md {
+    @apply p-3 sm:p-4;
+  }
+  
+  .p-responsive-lg {
+    @apply p-4 sm:p-6;
+  }
+  
+  /* Responsive margin utilities */
+  .m-responsive-sm {
+    @apply m-2 sm:m-3;
+  }
+  
+  .m-responsive-md {
+    @apply m-3 sm:m-4;
+  }
+  
+  .m-responsive-lg {
+    @apply m-4 sm:m-6;
+  }
+  
+  /* Mobile-specific utilities */
+  .mobile-only {
+    @apply block sm:hidden;
+  }
+  
+  .desktop-only {
+    @apply hidden sm:block;
+  }
+  
+  /* Touch-friendly button sizes */
+  .touch-button {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  /* Responsive grid utilities */
+  .grid-responsive-1 {
+    @apply grid-cols-1;
+  }
+  
+  .grid-responsive-2 {
+    @apply grid-cols-1 sm:grid-cols-2;
+  }
+  
+  .grid-responsive-3 {
+    @apply grid-cols-1 sm:grid-cols-2 lg:grid-cols-3;
+  }
+  
+  .grid-responsive-4 {
+    @apply grid-cols-1 sm:grid-cols-2 lg:grid-cols-4;
+  }
+  
+  /* Responsive flex utilities */
+  .flex-responsive-col {
+    @apply flex-col sm:flex-row;
+  }
+  
+  .flex-responsive-row {
+    @apply flex-row sm:flex-col;
+  }
+  
+  /* Responsive gap utilities */
+  .gap-responsive-sm {
+    @apply gap-1 sm:gap-2;
+  }
+  
+  .gap-responsive-md {
+    @apply gap-2 sm:gap-3;
+  }
+  
+  .gap-responsive-lg {
+    @apply gap-3 sm:gap-4;
+  }
+  
+  /* Responsive width utilities */
+  .w-responsive-full {
+    @apply w-full sm:w-auto;
+  }
+  
+  .w-responsive-auto {
+    @apply w-auto sm:w-full;
+  }
+  
+  /* Responsive height utilities */
+  .h-responsive-screen {
+    @apply h-[calc(100vh-4rem)];
+  }
+  
+  /* Responsive icon sizes */
+  .icon-responsive-sm {
+    @apply h-3 w-3 sm:h-4 sm:w-4;
+  }
+  
+  .icon-responsive-md {
+    @apply h-4 w-4 sm:h-5 sm:w-5;
+  }
+  
+  .icon-responsive-lg {
+    @apply h-5 w-5 sm:h-6 sm:w-6;
+  }
+  
+  /* Responsive avatar sizes */
+  .avatar-responsive-sm {
+    @apply h-6 w-6 sm:h-8 sm:w-8;
+  }
+  
+  .avatar-responsive-md {
+    @apply h-8 w-8 sm:h-10 sm:w-10;
+  }
+  
+  .avatar-responsive-lg {
+    @apply h-10 w-10 sm:h-12 sm:w-12;
+  }
+  
+  /* Responsive dialog utilities */
+  .dialog-responsive {
+    @apply max-w-[95vw] sm:max-w-md mx-4;
+  }
+  
+  .dialog-responsive-lg {
+    @apply max-w-[95vw] sm:max-w-2xl mx-4;
+  }
+  
+  .dialog-responsive-xl {
+    @apply max-w-[95vw] sm:max-w-3xl mx-4;
+  }
+  
+  /* Responsive card utilities */
+  .card-responsive {
+    @apply p-3 sm:p-4;
+  }
+  
+  .card-responsive-lg {
+    @apply p-4 sm:p-6;
+  }
+  
+  /* Responsive input utilities */
+  .input-responsive {
+    @apply text-sm px-3 py-2;
+  }
+  
+  /* Responsive button utilities */
+  .button-responsive {
+    @apply text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2;
+  }
+  
+  /* Responsive badge utilities */
+  .badge-responsive {
+    @apply text-xs px-1.5 sm:px-2 py-0.5 sm:py-1;
+  }
+  
+  /* Responsive message utilities */
+  .message-responsive {
+    @apply max-w-[85%] sm:max-w-[70%];
+  }
+  
+  /* Responsive header utilities */
+  .header-responsive {
+    @apply px-3 sm:px-6 py-2 sm:py-4;
+  }
+  
+  /* Responsive content utilities */
+  .content-responsive {
+    @apply px-3 sm:px-6 py-3 sm:py-4;
+  }
+  
+  /* Responsive footer utilities */
+  .footer-responsive {
+    @apply px-3 sm:px-6 py-3 sm:py-4;
+  }
+}

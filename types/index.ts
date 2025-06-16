@@ -10,6 +10,7 @@ export interface User {
   role: UserRole
   profileImage?: string
   mobileNumber?: string
+  mode?: "online" | "offline"
   registrationDate: Timestamp | Date
   isApproved: boolean
   assignedGroups: string[]
@@ -72,6 +73,30 @@ export interface AuthContextType {
   signUp: (userData: Partial<User>, password: string) => Promise<void>
   signOut: () => Promise<void>
   updateProfile: (data: Partial<User>) => Promise<void>
+}
+
+export interface ChatMessage {
+  id: string
+  groupId: string
+  senderId: string
+  senderName: string
+  senderImage?: string
+  content: string
+  timestamp: Timestamp | Date
+  messageType: "text" | "file" | "image"
+  fileUrl?: string
+  fileName?: string
+  fileSize?: number
+}
+
+export interface GroupChat {
+  id: string
+  groupId: string
+  groupName: string
+  lastMessage?: ChatMessage
+  lastMessageTime?: Timestamp | Date
+  unreadCount: number
+  participants: string[]
 }
 
 

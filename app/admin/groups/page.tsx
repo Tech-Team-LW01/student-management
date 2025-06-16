@@ -20,12 +20,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { getGroups, createGroup, updateGroup, deleteGroup, uploadFile, getStudentsByGroupId, removeUserFromGroup } from "@/lib/firebase-utils"
+import { getGroups, createGroup, updateGroup, deleteGroup, uploadFile, getStudentsByGroupId, removeUserFromGroup, clearGroupMessages } from "@/lib/firebase-utils"
 import { useAuth } from "@/contexts/auth-context"
 import type { Group, User } from "@/types"
-import { Plus, Edit, Trash2, Upload, ExternalLink, Users, UserMinus } from "lucide-react"
+import { Plus, Edit, Trash2, Upload, ExternalLink, Users, UserMinus, MessageSquare, Search, Filter, MoreHorizontal, Calendar, Hash, MessageCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import { formatDistanceToNow } from "date-fns"
 
 export default function GroupsPage() {
   const { user } = useAuth()
@@ -47,6 +49,8 @@ export default function GroupsPage() {
   const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false)
   const [membersLoading, setMembersLoading] = useState(false)
   const [removingMember, setRemovingMember] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterRole, setFilterRole] = useState("all")
 
   useEffect(() => {
     fetchGroups()
@@ -200,6 +204,33 @@ export default function GroupsPage() {
     }
   }
 
+  const handleClearChat = async (groupId: string) => {
+    if (!user || !confirm("Are you sure you want to clear all messages in this group? This action cannot be undone.")) {
+      return
+    }
+
+    try {
+      const deletedCount = await clearGroupMessages(groupId, user.id)
+      console.log(`Cleared ${deletedCount} messages from group ${groupId}`)
+      // You could show a success message here
+    } catch (error) {
+      console.error("Error clearing chat:", error)
+      setError("Failed to clear chat")
+    }
+  }
+
+  const filteredGroups = groups.filter(group => {
+    const matchesSearch = group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         group.description.toLowerCase().includes(searchTerm.toLowerCase())
+    return matchesSearch
+  })
+
+  const formatDate = (date: Date | any) => {
+    if (!date) return "Unknown"
+    const dateObj = date instanceof Date ? date : date.toDate ? date.toDate() : new Date(date)
+    return formatDistanceToNow(dateObj, { addSuffix: true })
+  }
+
   if (loading) {
     return (
       <ProtectedRoute allowedRoles={["super_admin", "admin"]}>
@@ -215,11 +246,12 @@ export default function GroupsPage() {
   return (
     <ProtectedRoute allowedRoles={["super_admin", "admin"]}>
       <MainLayout>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
+        <div className="space-y-4 sm:space-y-6 px-4 sm:px-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold">LinuxWorld Groups Management</h1>
-              <p className="text-muted-foreground">Create and manage LinuxWorld student groups</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Group Management</h1>
+              <p className="text-muted-foreground mt-1 text-sm sm:text-base">Create and manage LinuxWorld student groups</p>
             </div>
             <Dialog
               open={isCreateDialogOpen}
@@ -229,64 +261,70 @@ export default function GroupsPage() {
               }}
             >
               <DialogTrigger asChild>
-                <Button>
+                <Button className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto">
                   <Plus className="mr-2 h-4 w-4" />
                   Create Group
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-2xl mx-4">
                 <DialogHeader>
-                  <DialogTitle>{editingGroup ? "Edit Group" : "Create New Group"}</DialogTitle>
-                  <DialogDescription>
-                    {editingGroup ? "Update group information" : "Add a new group for students"}
+                  <DialogTitle className="text-lg sm:text-xl">{editingGroup ? "Edit Group" : "Create New Group"}</DialogTitle>
+                  <DialogDescription className="text-sm">
+                    {editingGroup ? "Update group information and settings" : "Add a new group for students to collaborate"}
                   </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                   {error && (
                     <Alert variant="destructive">
                       <AlertDescription>{error}</AlertDescription>
                     </Alert>
                   )}
 
+                  {/* Group Image */}
                   <div className="flex justify-center">
                     <div className="relative">
-                      <Avatar className="h-20 w-20">
+                      <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-4 border-gray-200">
                         <AvatarImage src={formData.groupImage || "/placeholder.svg"} />
-                        <AvatarFallback>{formData.name ? formData.name.charAt(0).toUpperCase() : "G"}</AvatarFallback>
+                        <AvatarFallback className="text-base sm:text-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                          {formData.name ? formData.name.charAt(0).toUpperCase() : "G"}
+                        </AvatarFallback>
                       </Avatar>
-                      <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-1 rounded-full cursor-pointer hover:bg-blue-700">
-                        <Upload className="h-3 w-3" />
+                      <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-1.5 sm:p-2 rounded-full cursor-pointer hover:bg-blue-700 transition-colors">
+                        <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
                         <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                       </label>
                     </div>
                   </div>
 
+                  {/* Form Fields */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Group Name *</Label>
+                      <Label htmlFor="name" className="text-sm font-medium">Group Name *</Label>
                       <Input
                         id="name"
                         value={formData.name}
                         onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                         required
                         placeholder="Enter group name"
+                        className="border-gray-300 focus:border-blue-500"
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="discordLink">Discord Link</Label>
+                      <Label htmlFor="discordLink" className="text-sm font-medium">Discord Link</Label>
                       <Input
                         id="discordLink"
                         type="url"
                         value={formData.discordLink}
                         onChange={(e) => setFormData((prev) => ({ ...prev, discordLink: e.target.value }))}
                         placeholder="https://discord.gg/..."
+                        className="border-gray-300 focus:border-blue-500"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="description">Description *</Label>
+                    <Label htmlFor="description" className="text-sm font-medium">Description *</Label>
                     <Textarea
                       id="description"
                       value={formData.description}
@@ -294,25 +332,27 @@ export default function GroupsPage() {
                       required
                       placeholder="Enter group description"
                       rows={3}
+                      className="border-gray-300 focus:border-blue-500"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="hash13Link">Hash13 Link</Label>
+                    <Label htmlFor="hash13Link" className="text-sm font-medium">Hash13 Link</Label>
                     <Input
                       id="hash13Link"
                       type="url"
                       value={formData.hash13Link}
                       onChange={(e) => setFormData((prev) => ({ ...prev, hash13Link: e.target.value }))}
                       placeholder="https://hash13.com/..."
+                      className="border-gray-300 focus:border-blue-500"
                     />
                   </div>
 
-                  <div className="flex gap-3">
-                    <Button type="submit" disabled={formLoading} className="flex-1">
+                  <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                    <Button type="submit" disabled={formLoading} className="flex-1 bg-blue-600 hover:bg-blue-700">
                       {formLoading ? "Saving..." : editingGroup ? "Update Group" : "Create Group"}
                     </Button>
-                    <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                    <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)} className="flex-1 sm:flex-none">
                       Cancel
                     </Button>
                   </div>
@@ -321,85 +361,151 @@ export default function GroupsPage() {
             </Dialog>
           </div>
 
-          {groups.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Plus className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">No Groups Created</h3>
-                <p className="text-muted-foreground text-center mb-4">
-                  Create your first group to start organizing students.
+          {/* Search and Filter */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search groups..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 border-gray-300 focus:border-blue-500"
+              />
+            </div>
+            <Button variant="outline" className="border-gray-300 w-full sm:w-auto">
+              <Filter className="h-4 w-4 mr-2" />
+              Filter
+            </Button>
+          </div>
+
+          {/* Groups Grid */}
+          {filteredGroups.length === 0 ? (
+            <Card className="border-dashed border-2 border-gray-300">
+              <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12 px-4">
+                <div className="bg-gray-100 p-3 sm:p-4 rounded-full mb-4">
+                  <Plus className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400" />
+                </div>
+                <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2 text-center">No Groups Found</h3>
+                <p className="text-muted-foreground text-center mb-4 sm:mb-6 max-w-md text-sm sm:text-base">
+                  {searchTerm ? "No groups match your search criteria." : "Create your first group to start organizing students."}
                 </p>
-                <Button onClick={() => setIsCreateDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create First Group
-                </Button>
+                {!searchTerm && (
+                  <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create First Group
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {groups.map((group) => (
-                <Card key={group.id}>
-                  <CardHeader>
-                    <div className="flex items-center space-x-4">
-                      <Avatar>
-                        <AvatarImage src={group.groupImage || "/placeholder.svg"} />
-                        <AvatarFallback>{group.name ? group.name.charAt(0).toUpperCase() : "G"}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <CardTitle className="truncate">{group.name}</CardTitle>
-                        <CardDescription>
-                          <div className="flex items-center gap-2">
-                            {/* <Users className="h-4 w-4" /> */}
-                            {/* <span>{group.memberCount} members</span> */}
+            <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredGroups.map((group) => (
+                <Card key={group.id} className="group hover:shadow-lg transition-all duration-200 border-gray-200">
+                  <CardHeader className="pb-3 px-4 sm:px-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        <Avatar className="h-10 w-10 sm:h-12 sm:w-12 border-2 border-gray-100 flex-shrink-0">
+                          <AvatarImage src={group.groupImage || "/placeholder.svg"} />
+                          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold text-sm sm:text-base">
+                            {group.name.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-base sm:text-lg font-semibold text-gray-900 truncate">{group.name}</CardTitle>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Users className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400 flex-shrink-0" />
+                            <span className="text-xs sm:text-sm text-gray-500">{group.memberCount || 0} members</span>
                           </div>
-                        </CardDescription>
+                        </div>
+                      </div>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <Button variant="ghost" size="sm">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p className="text-sm text-muted-foreground">{group.description}</p>
+                  
+                  <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
+                    <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{group.description}</p>
 
-                    <div className="flex gap-2">
-                      {group.discordLink && (
-                        <Button size="sm" variant="outline" asChild>
-                          <a href={group.discordLink} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            Discord
-                          </a>
-                        </Button>
-                      )}
-                      {group.hash13Link && (
-                        <Button size="sm" variant="outline" asChild>
-                          <a href={group.hash13Link} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            Hash13
-                          </a>
-                        </Button>
-                      )}
-                    </div>
+                    {/* External Links */}
+                    {(group.discordLink || group.hash13Link) && (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        {group.discordLink && (
+                          <Button size="sm" variant="outline" asChild className="border-gray-300 text-xs">
+                            <a href={group.discordLink} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Discord
+                            </a>
+                          </Button>
+                        )}
+                        {group.hash13Link && (
+                          <Button size="sm" variant="outline" asChild className="border-gray-300 text-xs">
+                            <a href={group.hash13Link} target="_blank" rel="noopener noreferrer">
+                              <Hash className="h-3 w-3 mr-1" />
+                              Hash13
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                    )}
 
-                    <div className="flex gap-2">
+                    {/* Action Buttons */}
+                    <div className="grid grid-cols-2 gap-2">
                       <Button 
                         size="sm" 
                         variant="outline" 
                         onClick={() => handleViewMembers(group)}
-                        className="flex-1"
+                        className="border-gray-300 hover:bg-gray-50 text-xs"
                       >
                         <Users className="h-3 w-3 mr-1" />
-                        View Members
+                        Members
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleEdit(group)} className="flex-1">
+                      <Button size="sm" variant="outline" asChild className="border-gray-300 hover:bg-gray-50 text-xs">
+                        <a href={`/admin/groups/${group.id}/chat`}>
+                          <MessageCircle className="h-3 w-3 mr-1" />
+                          Chat
+                        </a>
+                      </Button>
+                    </div>
+
+                    {/* Admin Actions */}
+                    <div className="flex gap-1 sm:gap-2 pt-2 border-t border-gray-100">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => handleEdit(group)} 
+                        className="flex-1 border-gray-300 hover:bg-gray-50 text-xs"
+                      >
                         <Edit className="h-3 w-3 mr-1" />
                         Edit
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleDelete(group.id)}
-                        className="text-red-600 hover:text-red-700"
+                        onClick={() => handleClearChat(group.id)}
+                        className="border-orange-300 text-orange-600 hover:bg-orange-50 text-xs"
+                        title="Clear all messages in this group"
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3 w-3" /> Clear Chat
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDelete(group.id)}
+                        className="border-red-300 text-red-600 hover:bg-red-50 text-xs"
+                      >
+                        <Trash2 className="h-3 w-3" /> Delete Group
+                      </Button>
+                    </div>
+
+                    {/* Group Info */}
+                    <div className="text-xs text-gray-400 pt-2 border-t border-gray-100">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        <span>Created {formatDate(group.createdAt)}</span>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -410,11 +516,14 @@ export default function GroupsPage() {
 
         {/* Members Dialog */}
         <Dialog open={isMembersDialogOpen} onOpenChange={setIsMembersDialogOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-3xl mx-4">
             <DialogHeader>
-              <DialogTitle>
+              <DialogTitle className="text-lg sm:text-xl">
                 {selectedGroup?.name} - Members ({groupMembers.length})
               </DialogTitle>
+              <DialogDescription className="text-sm">
+                Manage group members and their roles
+              </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[60vh]">
               {membersLoading ? (
@@ -422,33 +531,38 @@ export default function GroupsPage() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 </div>
               ) : groupMembers.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No members in this group yet.
+                <div className="text-center py-8 px-4">
+                  <Users className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 text-sm sm:text-base">No members in this group yet.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-2 sm:space-y-3 px-2">
                   {groupMembers.map((member) => (
                     <div
                       key={member.id}
-                      className="flex items-center gap-4 p-4 rounded-lg border bg-card"
+                      className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg border bg-gray-50 hover:bg-gray-100 transition-colors"
                     >
-                      <Avatar>
+                      <Avatar className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0">
                         <AvatarImage src={member.profileImage} />
-                        <AvatarFallback>{member.name.charAt(0).toUpperCase()}</AvatarFallback>
+                        <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-sm">
+                          {member.name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{member.name}</p>
-                        <p className="text-sm text-muted-foreground truncate">{member.email}</p>
+                        <p className="font-medium text-gray-900 truncate text-sm sm:text-base">{member.name}</p>
+                        <p className="text-xs sm:text-sm text-gray-500 truncate">{member.email}</p>
                       </div>
-                      <Badge variant="outline">{member.role}</Badge>
+                      <Badge variant="outline" className="border-gray-300 text-xs flex-shrink-0">
+                        {member.role}
+                      </Badge>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleRemoveMember(member.id)}
                         disabled={removingMember === member.id}
-                        className="text-red-600 hover:text-red-700"
+                        className="border-red-300 text-red-600 hover:bg-red-50 flex-shrink-0"
                       >
-                        <UserMinus className="h-4 w-4" />
+                        <UserMinus className="h-3 w-3 sm:h-4 sm:w-4" />
                       </Button>
                     </div>
                   ))}

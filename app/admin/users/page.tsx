@@ -45,6 +45,7 @@ import {
   getGroups,
   assignUserToGroups,
   updateUserRole,
+  updateUserMode,
   deleteUser,
   canAssignRoles,
 } from "@/lib/firebase-utils"
@@ -100,6 +101,7 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [selectedGroups, setSelectedGroups] = useState<string[]>([])
   const [selectedRole, setSelectedRole] = useState<UserRole>("student")
+  const [selectedMode, setSelectedMode] = useState<"online" | "offline">("online")
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -113,6 +115,11 @@ export default function UsersPage() {
   const [bulkGroupDialogOpen, setBulkGroupDialogOpen] = useState(false)
   const [selectedBulkGroups, setSelectedBulkGroups] = useState<string[]>([])
   const [bulkAssigning, setBulkAssigning] = useState(false)
+  const [bulkModeSearchEmails, setBulkModeSearchEmails] = useState("")
+  const [bulkModeSearchResults, setBulkModeSearchResults] = useState<User[]>([])
+  const [bulkModeDialogOpen, setBulkModeDialogOpen] = useState(false)
+  const [selectedBulkMode, setSelectedBulkMode] = useState<"online" | "offline">("online")
+  const [bulkModeUpdating, setBulkModeUpdating] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -164,6 +171,7 @@ export default function UsersPage() {
     setSelectedUser(user)
     setSelectedGroups(user.assignedGroups || [])
     setSelectedRole(user.role)
+    setSelectedMode(user.mode || "online")
     setDialogOpen(true)
   }
 
@@ -185,7 +193,7 @@ export default function UsersPage() {
     try {
       // Update groups if changed
       if (JSON.stringify(selectedGroups.sort()) !== JSON.stringify((selectedUser.assignedGroups || []).sort())) {
-        await assignUserToGroups(selectedUser.id, selectedGroups, currentUser.id)
+        await assignUserToGroups(selectedUser.id, selectedGroups)
       }
 
       // Update role if changed
@@ -193,10 +201,15 @@ export default function UsersPage() {
         await updateUserRole(selectedUser.id, selectedRole, currentUser.id)
       }
 
+      // Update mode if changed
+      if (selectedMode !== selectedUser.mode) {
+        await updateUserMode(selectedUser.id, selectedMode, currentUser.id)
+      }
+
       // Update local state
       setUsers((prev) =>
         prev.map((user) =>
-          user.id === selectedUser.id ? { ...user, assignedGroups: selectedGroups, role: selectedRole } : user,
+          user.id === selectedUser.id ? { ...user, assignedGroups: selectedGroups, role: selectedRole, mode: selectedMode } : user,
         ),
       )
 
@@ -218,7 +231,7 @@ export default function UsersPage() {
     if (!currentUser) return
 
     try {
-      await deleteUser(userId, currentUser.id)
+      await deleteUser(userId)
       setUsers((prev) => prev.filter((user) => user.id !== userId))
       setSuccess(`Successfully deleted ${userName}.`)
       setTimeout(() => setSuccess(null), 5000)
@@ -315,7 +328,7 @@ export default function UsersPage() {
 
     try {
       const promises = bulkSearchResults.notInGroups.map(user => 
-        assignUserToGroups(user.id, selectedBulkGroups, currentUser.id)
+        assignUserToGroups(user.id, selectedBulkGroups)
       )
       
       await Promise.all(promises)
@@ -338,6 +351,46 @@ export default function UsersPage() {
       setError(error.message || "Failed to assign groups.")
     } finally {
       setBulkAssigning(false)
+    }
+  }
+
+  const handleBulkModeSearch = () => {
+    const emailList = bulkModeSearchEmails.split(',').map(email => email.trim().toLowerCase())
+    const matchedUsers = users.filter(user => emailList.includes(user.email.toLowerCase()))
+    setBulkModeSearchResults(matchedUsers)
+  }
+
+  const handleBulkModeAssignment = async () => {
+    if (!currentUser || bulkModeSearchResults.length === 0) return
+    
+    setBulkModeUpdating(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const promises = bulkModeSearchResults.map(user => 
+        updateUserMode(user.id, selectedBulkMode, currentUser.id)
+      )
+      
+      await Promise.all(promises)
+      
+      // Update local state
+      setUsers(prev => prev.map(user => {
+        if (bulkModeSearchResults.some(u => u.id === user.id)) {
+          return { ...user, mode: selectedBulkMode }
+        }
+        return user
+      }))
+
+      setSuccess(`Successfully updated ${bulkModeSearchResults.length} users to ${selectedBulkMode} mode.`)
+      setBulkModeDialogOpen(false)
+      setBulkModeSearchResults([])
+      setBulkModeSearchEmails("")
+    } catch (error: any) {
+      console.error("Error updating user modes:", error)
+      setError(error.message || "Failed to update user modes.")
+    } finally {
+      setBulkModeUpdating(false)
     }
   }
 
@@ -679,6 +732,105 @@ export default function UsersPage() {
               </CardContent>
             </Card>
 
+            {/* Bulk Mode Assignment Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Bulk Mode Assignment</CardTitle>
+                <CardDescription>
+                  Search users by email and assign them to online/offline mode in bulk
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-3">
+                  <Input
+                    placeholder="Enter emails separated by commas..."
+                    value={bulkModeSearchEmails}
+                    onChange={(e) => setBulkModeSearchEmails(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button onClick={handleBulkModeSearch}>
+                    Search
+                  </Button>
+                </div>
+
+                {bulkModeSearchResults.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-sm">
+                        Found Users ({bulkModeSearchResults.length})
+                      </h4>
+                      <Button
+                        size="sm"
+                        onClick={() => setBulkModeDialogOpen(true)}
+                      >
+                        Assign Mode
+                      </Button>
+                    </div>
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-gray-50 border-b">
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Mode</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {bulkModeSearchResults.map(user => (
+                            <tr key={user.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-8 w-8">
+                                    <AvatarImage src={user.profileImage || "/placeholder.svg"} />
+                                    <AvatarFallback className="text-sm bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                                      {user.name.charAt(0).toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="font-medium">{user.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                                {user.email}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <Badge className={`${getRoleColor(user.role)} border flex items-center gap-1`}>
+                                  {getRoleIcon(user.role)}
+                                  <span className="text-xs">{getRoleDisplayName(user.role)}</span>
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <Badge 
+                                  variant="outline"
+                                  className={`${
+                                    user.mode === "online" 
+                                      ? "bg-blue-50 text-blue-700 border-blue-200" 
+                                      : "bg-orange-50 text-orange-700 border-orange-200"
+                                  }`}
+                                >
+                                  {user.mode === "online" ? (
+                                    <>
+                                      <div className="w-2 h-2 bg-blue-500 rounded-full mr-1" />
+                                      Online
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="w-2 h-2 bg-orange-500 rounded-full mr-1" />
+                                      Offline
+                                    </>
+                                  )}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Users List */}
             {filteredUsers.length === 0 ? (
               <Card>
@@ -709,6 +861,7 @@ export default function UsersPage() {
                     <tr className="bg-gray-50 border-b">
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Groups</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registration</th>
@@ -746,6 +899,28 @@ export default function UsersPage() {
                           <Badge className={`${getRoleColor(user.role)} border flex items-center gap-1`}>
                             {getRoleIcon(user.role)}
                             <span className="text-xs">{getRoleDisplayName(user.role)}</span>
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <Badge 
+                            variant="outline"
+                            className={`${
+                              user.mode === "online" 
+                                ? "bg-blue-50 text-blue-700 border-blue-200" 
+                                : "bg-orange-50 text-orange-700 border-orange-200"
+                            }`}
+                          >
+                            {user.mode === "online" ? (
+                              <>
+                                <div className="w-2 h-2 bg-blue-500 rounded-full mr-1" />
+                                Online
+                              </>
+                            ) : (
+                              <>
+                                <div className="w-2 h-2 bg-orange-500 rounded-full mr-1" />
+                                Offline
+                              </>
+                            )}
                           </Badge>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
@@ -981,6 +1156,33 @@ export default function UsersPage() {
                       </div>
                     )}
 
+                    {/* Mode Selection */}
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="font-medium mb-1">User Mode</h4>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          Select the mode this user should have access to
+                        </p>
+                      </div>
+                      
+                      <Tabs value={selectedMode} onValueChange={(value) => setSelectedMode(value as "online" | "offline")}>
+                        <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full">
+                          <TabsTrigger
+                            value="online"
+                            className="text-xs sm:text-sm"
+                          >
+                            Online
+                          </TabsTrigger>
+                          <TabsTrigger
+                            value="offline"
+                            className="text-xs sm:text-sm"
+                          >
+                            Offline
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    </div>
+
                     {/* Action Buttons */}
                     <div className="flex gap-3 pt-4">
                       <Button 
@@ -1103,6 +1305,67 @@ export default function UsersPage() {
                         setSelectedBulkGroups([])
                       }}
                       disabled={bulkAssigning}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Bulk Mode Assignment Dialog */}
+            <Dialog open={bulkModeDialogOpen} onOpenChange={setBulkModeDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Assign Mode to Users</DialogTitle>
+                  <DialogDescription>
+                    Select mode to assign to {bulkModeSearchResults.length} users
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <div>
+                      <h4 className="font-medium mb-1">Batch Mode</h4>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Select the mode for all selected users
+                      </p>
+                    </div>
+                    
+                    <Tabs value={selectedBulkMode} onValueChange={(value) => setSelectedBulkMode(value as "online" | "offline")}>
+                      <TabsList className="grid grid-cols-2 w-full">
+                        <TabsTrigger value="online" className="text-sm">
+                          Online
+                        </TabsTrigger>
+                        <TabsTrigger value="offline" className="text-sm">
+                          Offline
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <Button 
+                      onClick={handleBulkModeAssignment} 
+                      disabled={bulkModeUpdating} 
+                      className="flex-1"
+                    >
+                      {bulkModeUpdating ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Assign {selectedBulkMode} Mode
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setBulkModeDialogOpen(false)}
+                      disabled={bulkModeUpdating}
                     >
                       Cancel
                     </Button>

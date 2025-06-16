@@ -6,10 +6,20 @@ export interface User {
   email: string
   role: "super_admin" | "admin" | "student"
   profileImage?: string
+  mobileNumber?: string
+  mode?: "online" | "offline"
   createdAt: Date | Timestamp
   updatedAt: Date | Timestamp
   isApproved: boolean
   assignedGroups: string[]
+  totalAnnouncementsViewed?: number
+  registrationDate?: Date | Timestamp
+  notificationPreferences?: {
+    emailNotifications: boolean
+    announcementEmails: boolean
+    groupActivityEmails: boolean
+  }
+  forcePasswordChange?: boolean
 }
 
 export interface Group {
