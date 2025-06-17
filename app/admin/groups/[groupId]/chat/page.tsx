@@ -19,10 +19,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { getGroupById, subscribeToGroupMessages, sendGroupMessage, clearGroupMessages } from "@/lib/firebase-utils"
+import { getGroupById, subscribeToGroupMessages, sendGroupMessage, clearGroupMessages, uploadFile } from "@/lib/firebase-utils"
 import { useAuth } from "@/contexts/auth-context"
 import type { Group, ChatMessage } from "@/types"
-import { Send, ArrowLeft, Users, Calendar, Hash, ExternalLink, Trash2, Shield, MessageSquare } from "lucide-react"
+import { Send, ArrowLeft, Users, Calendar, Hash, ExternalLink, Trash2, Shield, MessageSquare, Paperclip, Download, Image as ImageIcon, FileText } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 
@@ -37,7 +37,9 @@ export default function AdminGroupChatPage({ params }: { params: { groupId: stri
   const [error, setError] = useState("")
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchGroup()
@@ -99,6 +101,45 @@ export default function AdminGroupChatPage({ params }: { params: { groupId: stri
     } finally {
       setClearing(false)
     }
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    try {
+      const filePath = `group-files/${groupId}/${Date.now()}-${file.name}`
+      const fileUrl = await uploadFile(file, filePath)
+      
+      const messageType = file.type.startsWith("image/") ? "image" : "file"
+      const fileName = file.name
+      const fileSize = file.size
+
+      await sendGroupMessage(groupId, {
+        content: `Sent ${fileName}`,
+        messageType,
+        fileUrl,
+        fileName,
+        fileSize
+      })
+    } catch (error) {
+      console.error("Error uploading file:", error)
+      setError("Failed to upload file")
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
 
   const formatDate = (date: Date | any) => {
@@ -252,6 +293,7 @@ export default function AdminGroupChatPage({ params }: { params: { groupId: stri
               <div className="space-y-3 sm:space-y-4">
                 {messages.map((message) => {
                   const isOwnMessage = message.senderId === user?.id
+                  const isAdminMessage = message.senderName?.toLowerCase().includes("admin")
                   
                   return (
                     <div
@@ -270,20 +312,64 @@ export default function AdminGroupChatPage({ params }: { params: { groupId: stri
                           <div className="flex items-center gap-1 sm:gap-2 mb-1">
                             <span className="text-xs sm:text-sm font-medium text-gray-900 truncate">{message.senderName}</span>
                             <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(message.timestamp)}</span>
-                            {isOwnMessage && (
-                              <Badge variant="outline" className="border-blue-300 text-blue-600 text-xs">
-                                <Shield className="h-3 w-3 mr-1" />
+                            {isAdminMessage && (
+                              <Badge variant="outline" className="border-yellow-300 bg-yellow-50 text-yellow-700 text-[10px]">
                                 Admin
                               </Badge>
                             )}
                           </div>
                           
                           <div className={`rounded-lg px-3 sm:px-4 py-2 max-w-full ${
-                            isOwnMessage 
-                              ? "bg-blue-600 text-white" 
+                            isOwnMessage
+                              ? "bg-blue-500 text-white"
+                              : isAdminMessage
+                              ? "bg-yellow-50 border border-yellow-200"
                               : "bg-gray-100 text-gray-900"
                           }`}>
-                            <p className="whitespace-pre-wrap break-words text-xs sm:text-sm">{message.content}</p>
+                            {message.messageType === "text" ? (
+                              <p className="text-sm sm:text-base whitespace-pre-wrap break-words">{message.content}</p>
+                            ) : message.messageType === "image" ? (
+                              <div className="space-y-2">
+                                <a
+                                  href={message.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block"
+                                >
+                                  <img
+                                    src={message.fileUrl}
+                                    alt={message.fileName || "Image"}
+                                    className="max-w-full rounded-lg"
+                                  />
+                                </a>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="flex items-center gap-1">
+                                    <ImageIcon className="h-3 w-3" />
+                                    {message.fileName}
+                                  </span>
+                                  <span>{message.fileSize && formatFileSize(message.fileSize)}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="h-4 w-4" />
+                                  <span className="text-sm truncate">{message.fileName}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span>{message.fileSize && formatFileSize(message.fileSize)}</span>
+                                  <a
+                                    href={message.fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 hover:underline"
+                                  >
+                                    <Download className="h-3 w-3" />
+                                    Download
+                                  </a>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -294,22 +380,38 @@ export default function AdminGroupChatPage({ params }: { params: { groupId: stri
             )}
           </ScrollArea>
 
-          {/* Message Input for Admins */}
-          <div className="bg-white border-t px-3 sm:px-6 py-3 sm:py-4">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <Input
-                placeholder="Type a message as admin..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                className="flex-1 border-gray-300 focus:border-blue-500 text-sm"
-                disabled={sending}
+          {/* Message Input */}
+          <div className="border-t bg-white px-4 py-3 sm:px-6">
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                className="hidden"
+                accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
               />
               <Button
+                size="icon"
+                variant="outline"
+                className="flex-shrink-0"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              <Input
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder="Type a message..."
+                className="flex-1"
+                disabled={sending || uploading}
+              />
+              <Button
+                size="icon"
+                className="flex-shrink-0"
                 onClick={handleSendMessage}
-                disabled={!newMessage.trim() || sending}
-                size="sm"
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 flex-shrink-0"
+                disabled={!newMessage.trim() || sending || uploading}
               >
                 <Send className="h-4 w-4" />
               </Button>

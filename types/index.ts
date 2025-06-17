@@ -99,5 +99,40 @@ export interface GroupChat {
   participants: string[]
 }
 
+export interface Notification {
+  id: string
+  title: string
+  content: string
+  createdAt: Timestamp | Date
+  createdBy: string
+  recipients: {
+    type: "individual" | "group" | "mode" | "bulk"
+    userIds?: string[]
+    groupIds?: string[]
+    mode?: "online" | "offline"
+    emails?: string[]
+  }
+  status: "sent" | "delivered" | "read"
+  readBy: string[]
+}
+
+export interface NDADocument {
+  id: string
+  title: string
+  description?: string
+  type: "admin" | "student"
+  uploadedBy: string
+  studentId?: string
+  uploadedAt: Date
+  fileUrl: string
+  fileName: string
+  fileSize: number
+  status: "pending" | "approved" | "rejected"
+  rejectionReason?: string
+  approvedBy?: string
+  approvedAt?: Date
+  originalDocumentId?: string // ID of the original admin document if this is a student's signed version
+}
+
 
 

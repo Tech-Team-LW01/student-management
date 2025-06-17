@@ -8,17 +8,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { getGroups, getAnnouncements } from "@/lib/firebase-utils"
+import { getGroups, getAnnouncements, getStudentsByGroupId } from "@/lib/firebase-utils"
 import type { Group, Announcement } from "@/types"
-import { BookOpen, ExternalLink, FileText, Download, Eye, MessageSquare } from "lucide-react"
+import { BookOpen, ExternalLink, FileText, Download, Eye, MessageSquare, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Timestamp } from "firebase/firestore"
+import Link from "next/link"
 
 export default function GroupsPage() {
   const { user } = useAuth()
   const [groups, setGroups] = useState<Group[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
+  const [groupMemberCounts, setGroupMemberCounts] = useState<Record<string, number>>({})
   const [previewedAttachment, setPreviewedAttachment] = useState<{ announcementId: string, fileIndex: number } | null>(null)
 
   useEffect(() => {
@@ -41,6 +43,19 @@ export default function GroupsPage() {
           // Filter groups that user is assigned to
           const userGroups = allGroups.filter((group) => validGroupIds.includes(group.id))
           setGroups(userGroups)
+
+          // Fetch member counts for each group
+          const memberCountsPromises = userGroups.map(async (group) => {
+            const students = await getStudentsByGroupId(group.id)
+            return { groupId: group.id, count: students.length }
+          })
+
+          const memberCounts = await Promise.all(memberCountsPromises)
+          const countsMap = memberCounts.reduce((acc, { groupId, count }) => {
+            acc[groupId] = count
+            return acc
+          }, {} as Record<string, number>)
+          setGroupMemberCounts(countsMap)
 
           // Filter announcements that belong to user's assigned groups
           const filteredAnnouncements = allAnnouncements.filter((announcement) => {
@@ -166,6 +181,9 @@ export default function GroupsPage() {
                           <CardDescription className="text-blue-700 flex items-center gap-2">
                             <MessageSquare className="h-4 w-4" />
                             {getAnnouncementCount(group.id)} announcements
+                            <span>•</span>
+                            <Users className="h-4 w-4" />
+                            {groupMemberCounts[group.id] || 0} members
                           </CardDescription>
                         </div>
                       </div>
@@ -174,6 +192,12 @@ export default function GroupsPage() {
                       <p className="text-sm text-blue-800">{group.description}</p>
 
                       <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="border-green-300 text-green-700 hover:bg-green-50" asChild>
+                          <Link href={`/groups/${group.id}/chat`}>
+                            <MessageSquare className="h-4 w-4 mr-1 text-green-500" />
+                            Chat
+                          </Link>
+                        </Button>
                         {group.discordLink && (
                           <Button size="sm" variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50" asChild>
                             <a href={group.discordLink} target="_blank" rel="noopener noreferrer">

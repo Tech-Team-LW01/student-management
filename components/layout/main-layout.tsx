@@ -36,10 +36,15 @@ import {
   BookOpen,
   UserPlus,
   BarChart3,
+  Bell,
+  FileText,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import Image from "next/image"
+import { useEffect, useState } from "react"
+import { getNotificationsForUser } from "@/lib/firebase-utils"
+import type { Notification } from "@/types"
 
 interface MainLayoutProps {
   children: React.ReactNode
@@ -48,6 +53,25 @@ interface MainLayoutProps {
 export function MainLayout({ children }: MainLayoutProps) {
   const { user, signOutUser } = useAuth()
   const pathname = usePathname()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    if (user && user.role === "student") {
+      fetchUnreadNotifications()
+    }
+  }, [user])
+
+  const fetchUnreadNotifications = async () => {
+    if (!user) return
+
+    try {
+      const notifications = await getNotificationsForUser(user.id)
+      const unread = notifications.filter(n => !n.readBy.includes(user.id))
+      setUnreadCount(unread.length)
+    } catch (error) {
+      console.error("Error fetching notifications:", error)
+    }
+  }
 
   const getNavigationItems = () => {
     const baseItems = [{ title: "Dashboard", url: "/dashboard", icon: Home }]
@@ -57,6 +81,8 @@ export function MainLayout({ children }: MainLayoutProps) {
       return [
         ...baseItems,
         { title: "My Groups", url: "/groups", icon: BookOpen },
+        { title: "Notifications", url: "/notifications", icon: Bell },
+        { title: "NDA Documents", url: "/nda", icon: FileText },
         { title: "Profile", url: "/profile", icon: Settings },
       ]
     }
@@ -67,6 +93,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         ...baseItems,
         { title: "My Groups", url: "/groups", icon: BookOpen },
         { title: "Announcements", url: "/admin/announcements", icon: MessageSquare },
+        { title: "Notifications", url: "/admin/notifications", icon: Bell },
         { title: "Profile", url: "/profile", icon: Settings },
       ]
     }
@@ -80,6 +107,8 @@ export function MainLayout({ children }: MainLayoutProps) {
         { title: "Pending Approvals", url: "/admin/approvals", icon: UserCheck },
         { title: "Announcements", url: "/admin/announcements", icon: MessageSquare },
         { title: "Bulk Create", url: "/admin/bulk-create", icon: UserPlus },
+        { title: "Notifications", url: "/admin/notifications", icon: Bell },
+        { title: "NDA Documents", url: "/admin/nda", icon: FileText },
         { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
         { title: "Profile", url: "/profile", icon: Settings },
       ]
@@ -94,7 +123,8 @@ export function MainLayout({ children }: MainLayoutProps) {
         { title: "Pending Approvals", url: "/admin/approvals", icon: UserCheck },
         { title: "Announcements", url: "/admin/announcements", icon: MessageSquare },
         { title: "Bulk Create", url: "/admin/bulk-create", icon: UserPlus },
-        { title: "Create Admin", url: "/admin/create-admin", icon: UserPlus },
+        { title: "Notifications", url: "/admin/notifications", icon: Bell },
+        { title: "NDA Documents", url: "/admin/nda", icon: FileText },
         { title: "Platform Settings", url: "/admin/settings", icon: Shield },
         { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
         { title: "Profile", url: "/profile", icon: Settings },
@@ -221,17 +251,42 @@ export function MainLayout({ children }: MainLayoutProps) {
       </Sidebar>
 
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <div className="flex items-center gap-2 ml-auto">
-            {user && (
-              <Badge variant="outline" className={`${getRoleBadgeColor(user.role)} hidden sm:inline-flex`}>
-                {getRoleDisplayName(user.role)}
+        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="container flex h-14 items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link href="/" className="flex items-center space-x-2">
+                <Image
+                  src="/assets/LW@4x1.png"
+                  alt="Logo"
+                  width={100}
+                  height={40}
+                  priority
+                />
+              </Link>
+            </div>
+            <div className="flex items-center gap-2">
+              {user?.role === "student" && (
+                <Link
+                  href="/notifications"
+                  className="relative inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 w-9"
+                >
+                  <Bell className="h-4 w-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
+                      {unreadCount}
+                    </span>
+                  )}
+                </Link>
+              )}
+              <Badge variant="outline" className={`${getRoleBadgeColor(user?.role || "")} hidden sm:inline-flex`}>
+                {getRoleDisplayName(user?.role || "")}
               </Badge>
-            )}
+            </div>
           </div>
         </header>
-        <main className="flex-1 p-4 overflow-auto">{children}</main>
+        <main className="flex-1 p-4 overflow-auto">
+          {children}
+        </main>
       </SidebarInset>
     </SidebarProvider>
     </>

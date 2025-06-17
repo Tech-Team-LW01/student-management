@@ -19,8 +19,9 @@ import {
 } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
 import { db, storage, auth } from "./firebase"
-import type { User, Group, Announcement, ChatMessage } from "@/types"
+import type { User, Group, Announcement, ChatMessage, Notification, NDADocument } from "@/types"
 import { createUserWithEmailAndPassword } from "firebase/auth"
+import { sendEmailNotification } from "./email-service"
 
 // Default platform settings - used as fallback
 const DEFAULT_PLATFORM_SETTINGS = {
@@ -1177,6 +1178,259 @@ export const markGroupMessagesAsRead = async (groupId: string, userId: string) =
     return true
   } catch (error) {
     console.error("Error marking messages as read:", error)
+    throw error
+  }
+}
+
+// Notification operations
+export const sendNotification = async (notificationData: Omit<Notification, "id" | "createdAt" | "status" | "readBy">) => {
+  try {
+    // Add notification to Firestore
+    const docRef = await addDoc(collection(db, "notifications"), {
+      ...notificationData,
+      createdAt: serverTimestamp(),
+      status: "sent",
+      readBy: []
+    });
+
+    // Get user preferences and send email notifications if enabled
+    let recipientIds: string[] = [];
+    const recipients = notificationData.recipients;
+
+    if (recipients.type === "individual" && recipients.userIds) {
+      recipientIds = recipients.userIds;
+    } else if (recipients.type === "group" && recipients.groupIds) {
+      // Get all users in the specified groups
+      const groupUsers = await Promise.all(
+        recipients.groupIds.map(groupId => getStudentsByGroupId(groupId))
+      );
+      recipientIds = [...new Set(groupUsers.flat().map(user => user.id))];
+    } else if (recipients.type === "mode" && recipients.mode) {
+      // Get all users with the specified mode
+      const usersSnapshot = await getDocs(
+        query(collection(db, "users"), where("mode", "==", recipients.mode))
+      );
+      recipientIds = usersSnapshot.docs.map(doc => doc.id);
+    }
+
+    // Send email notifications to users who have them enabled
+    if (recipientIds.length > 0) {
+      const users = await getUsersByIds(recipientIds);
+      for (const user of users) {
+        if (user.notificationPreferences?.emailNotifications) {
+          // Send email notification
+          try {
+            await sendEmailNotification(
+              user.email,
+              notificationData.title,
+              notificationData.content
+            );
+          } catch (emailError) {
+            console.error(`Failed to send email notification to ${user.email}:`, emailError);
+          }
+        }
+      }
+    }
+
+    return docRef.id;
+  } catch (error) {
+    console.error("Error sending notification:", error);
+    throw error;
+  }
+}
+
+export const getNotificationsForUser = async (userId: string): Promise<Notification[]> => {
+  try {
+    // Get user data to check mode and groups
+    const userDoc = await getDoc(doc(db, "users", userId));
+    if (!userDoc.exists()) return [];
+    const userData = userDoc.data();
+
+    // Get all notifications
+    const q = query(
+      collection(db, "notifications"),
+      orderBy("createdAt", "desc")
+    );
+    const snapshot = await getDocs(q);
+    
+    // Filter notifications based on recipient type
+    return snapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Notification))
+      .map(notification => ({
+        ...notification,
+        createdAt: convertTimestamp(notification.createdAt)
+      }))
+      .filter(notification => {
+        const recipients = notification.recipients;
+        
+        // Check individual recipients
+        if (recipients.type === "individual" && recipients.userIds?.includes(userId)) {
+          return true;
+        }
+        
+        // Check group recipients
+        if (recipients.type === "group" && recipients.groupIds?.some(groupId => 
+          userData.assignedGroups?.includes(groupId)
+        )) {
+          return true;
+        }
+        
+        // Check mode recipients
+        if (recipients.type === "mode" && recipients.mode === userData.mode) {
+          return true;
+        }
+        
+        // Check bulk email recipients
+        if (recipients.type === "bulk" && recipients.emails?.includes(userData.email)) {
+          return true;
+        }
+        
+        return false;
+      });
+  } catch (error) {
+    console.error("Error getting notifications:", error);
+    return [];
+  }
+}
+
+export const getAllNotifications = async (): Promise<Notification[]> => {
+  try {
+    const q = query(collection(db, "notifications"), orderBy("createdAt", "desc"))
+    const snapshot = await getDocs(q)
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: convertTimestamp(doc.data().createdAt)
+    })) as Notification[]
+  } catch (error) {
+    console.error("Error getting all notifications:", error)
+    return []
+  }
+}
+
+export const markNotificationAsRead = async (notificationId: string, userId: string) => {
+  try {
+    await updateDoc(doc(db, "notifications", notificationId), {
+      status: "read",
+      readBy: arrayUnion(userId)
+    })
+  } catch (error) {
+    console.error("Error marking notification as read:", error)
+    throw error
+  }
+}
+
+// NDA Document operations
+export const uploadNDADocument = async (
+  file: File,
+  documentData: Omit<NDADocument, "id" | "uploadedAt" | "fileUrl" | "fileName" | "fileSize">
+) => {
+  try {
+    const filePath = `nda-documents/${documentData.type}/${Date.now()}-${file.name}`
+    const fileUrl = await uploadFile(file, filePath)
+
+    const docRef = await addDoc(collection(db, "nda-documents"), {
+      ...documentData,
+      fileUrl,
+      fileName: file.name,
+      fileSize: file.size,
+      uploadedAt: serverTimestamp(),
+      status: documentData.type === "admin" ? "approved" : "pending"
+    })
+
+    return docRef.id
+  } catch (error) {
+    console.error("Error uploading NDA document:", error)
+    throw error
+  }
+}
+
+export const getNDADocumentsForStudent = async (studentId: string): Promise<NDADocument[]> => {
+  try {
+    // Get documents sent to the student (admin documents)
+    const adminDocsQuery = query(
+      collection(db, "nda-documents"),
+      where("studentId", "==", studentId),
+      orderBy("uploadedAt", "desc")
+    )
+
+    // Get documents uploaded by the student
+    const studentDocsQuery = query(
+      collection(db, "nda-documents"),
+      where("uploadedBy", "==", studentId),
+      orderBy("uploadedAt", "desc")
+    )
+
+    // Execute both queries in parallel
+    const [adminDocsSnapshot, studentDocsSnapshot] = await Promise.all([
+      getDocs(adminDocsQuery),
+      getDocs(studentDocsQuery)
+    ])
+
+    // Convert and combine the results
+    const adminDocs = adminDocsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      uploadedAt: convertTimestamp(doc.data().uploadedAt),
+      approvedAt: doc.data().approvedAt ? convertTimestamp(doc.data().approvedAt) : undefined
+    })) as NDADocument[]
+
+    const studentDocs = studentDocsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      uploadedAt: convertTimestamp(doc.data().uploadedAt),
+      approvedAt: doc.data().approvedAt ? convertTimestamp(doc.data().approvedAt) : undefined
+    })) as NDADocument[]
+
+    // Filter admin docs to only include type "admin" and student docs to only include type "student"
+    const filteredAdminDocs = adminDocs.filter(doc => doc.type === "admin")
+    const filteredStudentDocs = studentDocs.filter(doc => doc.type === "student")
+
+    // Return combined results
+    return [...filteredAdminDocs, ...filteredStudentDocs]
+  } catch (error) {
+    console.error("Error getting NDA documents:", error)
+    return []
+  }
+}
+
+export const getAllNDADocuments = async (): Promise<NDADocument[]> => {
+  try {
+    const q = query(collection(db, "nda-documents"), orderBy("uploadedAt", "desc"))
+    const snapshot = await getDocs(q)
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      uploadedAt: convertTimestamp(doc.data().uploadedAt),
+      approvedAt: doc.data().approvedAt ? convertTimestamp(doc.data().approvedAt) : undefined
+    })) as NDADocument[]
+  } catch (error) {
+    console.error("Error getting all NDA documents:", error)
+    return []
+  }
+}
+
+export const updateNDADocumentStatus = async (
+  documentId: string,
+  status: "approved" | "rejected",
+  adminId: string,
+  rejectionReason?: string
+) => {
+  try {
+    await updateDoc(doc(db, "nda-documents", documentId), {
+      status,
+      ...(status === "approved" ? {
+        approvedAt: serverTimestamp(),
+        approvedBy: adminId
+      } : {
+        rejectionReason
+      })
+    })
+  } catch (error) {
+    console.error("Error updating NDA document status:", error)
     throw error
   }
 }

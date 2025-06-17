@@ -1,20 +1,31 @@
 import { NextResponse } from "next/server"
-import nodemailer from 'nodemailer'
+import nodemailer from "nodemailer"
 
 // Create reusable transporter for Gmail
 const createGmailTransporter = () => {
+  if (!process.env.GMAIL_EMAIL || !process.env.GMAIL_APP_PASSWORD) {
+    throw new Error("Gmail credentials not configured")
+  }
+  
   return nodemailer.createTransport({
-    service: 'gmail',
+    service: "gmail",
     auth: {
       user: process.env.GMAIL_EMAIL,
       pass: process.env.GMAIL_APP_PASSWORD,
     },
-  });
-};
+  })
+}
 
 export async function POST(request: Request) {
   try {
     const { to, subject, html, text } = await request.json()
+
+    if (!to || !subject || (!html && !text)) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      )
+    }
 
     const transporter = createGmailTransporter()
     const info = await transporter.sendMail({
@@ -27,7 +38,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, messageId: info.messageId })
   } catch (error) {
-    console.error('Error sending email:', error)
-    return NextResponse.json({ error: 'Failed to send email' }, { status: 500 })
+    console.error("Error sending email:", error)
+    return NextResponse.json(
+      { error: "Failed to send email" },
+      { status: 500 }
+    )
   }
 } 
