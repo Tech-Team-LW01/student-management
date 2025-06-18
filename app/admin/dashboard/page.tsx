@@ -29,6 +29,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { Timestamp } from "firebase/firestore"
+import { makeLinksClickable } from "@/lib/utils"
 
 interface AnalyticsData {
   totalUsers: number
@@ -494,7 +495,7 @@ export default function AdminDashboardPage() {
                   placeholder="Announcement content..."
                 />
               ) : (
-                <p className="whitespace-pre-wrap">{linkify(announcement.content)}</p>
+                <p className="whitespace-pre-wrap">{makeLinksClickable(announcement.content)}</p>
               )}
             </div>
 

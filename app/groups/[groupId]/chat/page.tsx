@@ -11,12 +11,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
-import { getGroupById, subscribeToGroupMessages, sendGroupMessage, uploadFile } from "@/lib/firebase-utils"
+import { getGroupById, subscribeToGroupMessages, sendGroupMessage, uploadFile, getStudentsByGroupId } from "@/lib/firebase-utils"
 import { useAuth } from "@/contexts/auth-context"
 import type { Group, ChatMessage } from "@/types"
 import { Send, Paperclip, ArrowLeft, Users, Calendar, Hash, ExternalLink, Download, Image as ImageIcon, FileText } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import Link from "next/link"
+import { makeLinksClickable } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 
 export default function GroupChatPage({ params }: { params: { groupId: string } }) {
   const { user } = useAuth()
@@ -28,6 +30,7 @@ export default function GroupChatPage({ params }: { params: { groupId: string } 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [uploading, setUploading] = useState(false)
+  const [memberCount, setMemberCount] = useState(0)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -45,6 +48,8 @@ export default function GroupChatPage({ params }: { params: { groupId: string } 
     try {
       const groupData = await getGroupById(groupId)
       setGroup(groupData)
+      const members = await getStudentsByGroupId(groupId)
+      setMemberCount(members.length)
     } catch (error) {
       console.error("Error fetching group:", error)
       setError("Failed to load group information")
@@ -170,7 +175,7 @@ export default function GroupChatPage({ params }: { params: { groupId: string } 
                     <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500">
                       <div className="flex items-center gap-1">
                         <Users className="h-3 w-3 sm:h-4 sm:w-4" />
-                        <span>{group.memberCount || 0} members</span>
+                        <span>{memberCount} members</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -185,17 +190,17 @@ export default function GroupChatPage({ params }: { params: { groupId: string } 
               <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                 {group.discordLink && (
                   <Button size="sm" variant="outline" asChild className="border-gray-300 text-xs">
-                    <a href={group.discordLink} target="_blank" rel="noopener noreferrer">
+                    <a href={group.discordLink} target="_blank" rel="noopener noreferrer" className="flex items-center">
                       <ExternalLink className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                      <span className="hidden sm:inline">Discord</span>
+                      <span className="hidden sm:inline max-w-[80px] truncate">Discord</span>
                     </a>
                   </Button>
                 )}
                 {group.hash13Link && (
                   <Button size="sm" variant="outline" asChild className="border-gray-300 text-xs">
-                    <a href={group.hash13Link} target="_blank" rel="noopener noreferrer">
+                    <a href={group.hash13Link} target="_blank" rel="noopener noreferrer" className="flex items-center">
                       <Hash className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                      <span className="hidden sm:inline">Hash13</span>
+                      <span className="hidden sm:inline max-w-[80px] truncate">Hash13</span>
                     </a>
                   </Button>
                 )}

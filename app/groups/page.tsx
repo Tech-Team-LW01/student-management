@@ -9,9 +9,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getGroups, getAnnouncements, getStudentsByGroupId } from "@/lib/firebase-utils"
-import type { Group, Announcement } from "@/types"
+import type { Group, Announcement, User } from "@/types"
 import { BookOpen, ExternalLink, FileText, Download, Eye, MessageSquare, Users } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, makeLinksClickable } from "@/lib/utils"
 import { Timestamp } from "firebase/firestore"
 import Link from "next/link"
 
@@ -21,6 +21,7 @@ export default function GroupsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
   const [groupMemberCounts, setGroupMemberCounts] = useState<Record<string, number>>({})
+  const [groupMembers, setGroupMembers] = useState<Record<string, User[]>>({})
   const [previewedAttachment, setPreviewedAttachment] = useState<{ announcementId: string, fileIndex: number } | null>(null)
 
   useEffect(() => {
@@ -37,25 +38,34 @@ export default function GroupsPage() {
           // Fetch all groups and announcements
           const [allGroups, allAnnouncements] = await Promise.all([
             getGroups(), 
-            getAnnouncements() // Get all announcements first
+            getAnnouncements()
           ])
 
           // Filter groups that user is assigned to
           const userGroups = allGroups.filter((group) => validGroupIds.includes(group.id))
           setGroups(userGroups)
 
-          // Fetch member counts for each group
-          const memberCountsPromises = userGroups.map(async (group) => {
+          // Fetch members for each group
+          const membersPromises = userGroups.map(async (group) => {
             const students = await getStudentsByGroupId(group.id)
-            return { groupId: group.id, count: students.length }
+            return { groupId: group.id, members: students }
           })
 
-          const memberCounts = await Promise.all(memberCountsPromises)
-          const countsMap = memberCounts.reduce((acc, { groupId, count }) => {
-            acc[groupId] = count
+          const membersResults = await Promise.all(membersPromises)
+          
+          // Set member counts
+          const countsMap = membersResults.reduce((acc, { groupId, members }) => {
+            acc[groupId] = members.length
             return acc
           }, {} as Record<string, number>)
           setGroupMemberCounts(countsMap)
+
+          // Set group members
+          const membersMap = membersResults.reduce((acc, { groupId, members }) => {
+            acc[groupId] = members
+            return acc
+          }, {} as Record<string, User[]>)
+          setGroupMembers(membersMap)
 
           // Filter announcements that belong to user's assigned groups
           const filteredAnnouncements = allAnnouncements.filter((announcement) => {
@@ -166,58 +176,76 @@ export default function GroupsPage() {
             <div className="space-y-8">
               {/* Groups Overview */}
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {groups.map((group) => (
-                  <Card key={group.id} className="rounded-xl shadow border-l-4 border-blue-400 bg-white hover:shadow-lg transition-shadow">
-                    <CardHeader>
-                      <div className="flex items-center space-x-4">
-                        <Avatar className="h-12 w-12 shadow border-2 border-blue-200">
-                          <AvatarImage src={group.groupImage || "/placeholder.svg"} />
-                          <AvatarFallback className="bg-blue-100 text-blue-700 font-bold">
-                            {group.name.charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="truncate text-blue-900 font-bold text-lg">{group.name}</CardTitle>
-                          <CardDescription className="text-blue-700 flex items-center gap-2">
-                            <MessageSquare className="h-4 w-4" />
-                            {getAnnouncementCount(group.id)} announcements
-                            <span>•</span>
-                            <Users className="h-4 w-4" />
-                            {groupMemberCounts[group.id] || 0} members
-                          </CardDescription>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <p className="text-sm text-blue-800">{group.description}</p>
+                {groups.map((group) => {
+                  const members = groupMembers[group.id] || [];
+                  const memberCount = groupMemberCounts[group.id] || 0;
+                  const onlineMembers = members.filter(m => m.mode === "online").length;
+                  const offlineMembers = members.filter(m => m.mode === "offline").length;
 
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="border-green-300 text-green-700 hover:bg-green-50" asChild>
-                          <Link href={`/groups/${group.id}/chat`}>
-                            <MessageSquare className="h-4 w-4 mr-1 text-green-500" />
-                            Chat
-                          </Link>
-                        </Button>
-                        {group.discordLink && (
-                          <Button size="sm" variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50" asChild>
-                            <a href={group.discordLink} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4 w-4 mr-1 text-blue-500" />
-                              Discord
-                            </a>
+                  return (
+                    <Card key={group.id} className="rounded-xl shadow border-l-4 border-blue-400 bg-white hover:shadow-lg transition-shadow">
+                      <CardHeader>
+                        <div className="flex items-center space-x-4">
+                          <Avatar className="h-12 w-12 shadow border-2 border-blue-200">
+                            <AvatarImage src={group.groupImage || "/placeholder.svg"} />
+                            <AvatarFallback className="bg-blue-100 text-blue-700 font-bold">
+                              {group.name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <CardTitle className="truncate text-blue-900 font-bold text-lg">{group.name}</CardTitle>
+                            <CardDescription className="text-blue-700 flex items-center gap-2">
+                              <MessageSquare className="h-4 w-4" />
+                              {getAnnouncementCount(group.id)} announcements
+                            </CardDescription>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-700">Members</span>
+                            <Badge variant="outline" className="bg-blue-50">
+                              {memberCount} total
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="flex items-center gap-2 text-sm">
+                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                {onlineMembers} online
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                                {offlineMembers} offline
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+
+                        <p className="text-sm text-blue-800">{group.description}</p>
+
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" className="border-green-300 text-green-700 hover:bg-green-50" asChild>
+                            <Link href={`/groups/${group.id}/chat`}>
+                              <MessageSquare className="h-4 w-4 mr-1 text-green-500" />
+                              Chat
+                            </Link>
                           </Button>
-                        )}
-                        {group.hash13Link && (
-                          <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50" asChild>
-                            <a href={group.hash13Link} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4 w-4 mr-1 text-purple-500" />
-                              Hash13
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+
+                          {group.hash13Link && (
+                            <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50" asChild>
+                              <a href={group.hash13Link} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="h-4 w-4 mr-1 text-purple-500" />
+                                Hash13
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
 
               {/* Announcements */}
@@ -275,7 +303,7 @@ export default function GroupsPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                           <div className="prose prose-sm max-w-none text-gray-800">
-                            <p className="whitespace-pre-wrap">{announcement.content}</p>
+                            <p className="whitespace-pre-wrap">{makeLinksClickable(announcement.content)}</p>
                           </div>
 
                           {announcement.files && announcement.files.length > 0 && (

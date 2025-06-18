@@ -30,11 +30,15 @@ export default function AdminNotificationsPage() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState("")
+  
+  // Add search state
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchFilter, setSearchFilter] = useState<"all" | "email" | "name">("all")
 
   // Form state
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
-  const [recipientType, setRecipientType] = useState<"individual" | "group" | "mode" | "bulk">("individual")
+  const [recipientType, setRecipientType] = useState<"individual" | "group" | "mode" | "bulk" | "all">("individual")
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
   const [selectedMode, setSelectedMode] = useState<"online" | "offline">("online")
@@ -67,14 +71,25 @@ export default function AdminNotificationsPage() {
 
     setSending(true)
     try {
-      const recipients: Notification["recipients"] = {
-        type: recipientType,
-        ...(recipientType === "individual" && { userIds: selectedUserIds }),
-        ...(recipientType === "group" && { groupIds: selectedGroupIds }),
-        ...(recipientType === "mode" && { mode: selectedMode }),
-        ...(recipientType === "bulk" && { 
-          emails: bulkEmails.split(",").map(email => email.trim()).filter(Boolean)
-        })
+      let recipients: Notification["recipients"];
+
+      if (recipientType === "all") {
+        // Get all student IDs
+        const studentIds = students.map(student => student.id)
+        recipients = {
+          type: "individual",
+          userIds: studentIds
+        }
+      } else {
+        recipients = {
+          type: recipientType,
+          ...(recipientType === "individual" && { userIds: selectedUserIds }),
+          ...(recipientType === "group" && { groupIds: selectedGroupIds }),
+          ...(recipientType === "mode" && { mode: selectedMode }),
+          ...(recipientType === "bulk" && { 
+            emails: bulkEmails.split(",").map(email => email.trim()).filter(Boolean)
+          })
+        }
       }
 
       await sendNotification({
@@ -108,6 +123,33 @@ export default function AdminNotificationsPage() {
     return formatDistanceToNow(dateObj, { addSuffix: true })
   }
 
+  // Filter notifications based on search query
+  const filteredNotifications = notifications.filter(notification => {
+    if (!searchQuery.trim()) return true;
+
+    // Get recipient information
+    const recipientInfo = notification.recipients.type === "individual" 
+      ? students.find(s => notification.recipients.userIds?.includes(s.id))
+      : notification.recipients.type === "bulk" 
+        ? { email: notification.recipients.emails?.join(", "), name: null }
+        : null;
+
+    if (!recipientInfo) return true;
+
+    const searchLower = searchQuery.toLowerCase();
+    
+    if (searchFilter === "email") {
+      return recipientInfo.email?.toLowerCase().includes(searchLower);
+    } else if (searchFilter === "name" && 'name' in recipientInfo && recipientInfo.name) {
+      return recipientInfo.name.toLowerCase().includes(searchLower);
+    } else {
+      return (
+        recipientInfo.email?.toLowerCase().includes(searchLower) ||
+        ('name' in recipientInfo && recipientInfo.name?.toLowerCase().includes(searchLower))
+      );
+    }
+  });
+
   if (loading) {
     return (
       <ProtectedRoute allowedRoles={["admin", "super_admin"]}>
@@ -130,6 +172,38 @@ export default function AdminNotificationsPage() {
               <p className="text-gray-500">Send and manage notifications to students</p>
             </div>
           </div>
+
+          {/* Search Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Search Notifications</CardTitle>
+              <CardDescription>Search through notification history by student email or name</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <Input
+                    placeholder="Search by email or name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <Select
+                  value={searchFilter}
+                  onValueChange={(value: any) => setSearchFilter(value)}
+                >
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Filter by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="name">Name</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Send Notification Form */}
           <Card>
@@ -170,6 +244,12 @@ export default function AdminNotificationsPage() {
                     <SelectValue placeholder="Select recipient type" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="all">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-blue-500" />
+                        <span>All Students ({students.length})</span>
+                      </div>
+                    </SelectItem>
                     <SelectItem value="individual">Individual Students</SelectItem>
                     <SelectItem value="group">Groups</SelectItem>
                     <SelectItem value="mode">By Mode (Online/Offline)</SelectItem>
@@ -243,61 +323,90 @@ export default function AdminNotificationsPage() {
                 disabled={!title.trim() || !content.trim() || sending}
                 className="w-full"
               >
-                {sending ? "Sending..." : "Send Notification"}
+                {sending ? (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Sending...</span>
+                  </div>
+                ) : (
+                  <>
+                    <Users className="h-4 w-4 mr-2" />
+                    Send Notification
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
 
-          {/* Notifications List */}
+          {/* Notification History */}
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-gray-900">Recent Notifications</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Notification History</h2>
             
-            {notifications.length === 0 ? (
+            {filteredNotifications.length === 0 ? (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-6">
                   <Bell className="h-12 w-12 text-gray-400 mb-4" />
-                  <p className="text-gray-500">No notifications sent yet</p>
+                  <p className="text-gray-500">
+                    {searchQuery ? "No notifications found matching your search" : "No notifications sent yet"}
+                  </p>
                 </CardContent>
               </Card>
             ) : (
               <div className="space-y-4">
-                {notifications.map((notification) => (
-                  <Card key={notification.id}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-lg">{notification.title}</CardTitle>
-                          <CardDescription>
-                            Sent {formatDate(notification.createdAt)}
-                          </CardDescription>
+                {filteredNotifications.map((notification) => {
+                  // Get recipient information
+                  const recipientInfo = (() => {
+                    switch (notification.recipients.type) {
+                      case "individual":
+                        const student = students.find(s => 
+                          notification.recipients.userIds?.includes(s.id)
+                        );
+                        return student 
+                          ? `${student.name} (${student.email})${student.mode ? ` - ${student.mode}` : ''}`
+                          : "Unknown Student";
+                      case "group":
+                        const groupNames = notification.recipients.groupIds
+                          ?.map(id => groups.find(g => g.id === id)?.name)
+                          .filter(Boolean)
+                          .join(", ");
+                        return `Group: ${groupNames || "Unknown Group"}`;
+                      case "mode":
+                        return `All ${notification.recipients.mode} students`;
+                      case "bulk":
+                        return `Bulk: ${notification.recipients.emails?.join(", ")}`;
+                      default:
+                        return "Unknown Recipients";
+                    }
+                  })();
+
+                  return (
+                    <Card key={notification.id}>
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="text-lg">{notification.title}</CardTitle>
+                            <CardDescription>
+                              Sent {formatDate(notification.createdAt)}
+                            </CardDescription>
+                          </div>
+                          <Badge>
+                            {notification.recipients.type}
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className="ml-2">
-                          {notification.recipients.type === "individual" && (
-                            <UserCheck className="h-3 w-3 mr-1" />
-                          )}
-                          {notification.recipients.type === "group" && (
-                            <Users className="h-3 w-3 mr-1" />
-                          )}
-                          {notification.recipients.type === "mode" && (
-                            <Globe className="h-3 w-3 mr-1" />
-                          )}
-                          {notification.recipients.type === "bulk" && (
-                            <Mail className="h-3 w-3 mr-1" />
-                          )}
-                          {notification.recipients.type}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-gray-700 whitespace-pre-wrap">{notification.content}</p>
-                      <div className="mt-4 flex items-center gap-2">
-                        <Badge variant="secondary">
-                          {notification.readBy.length} read
-                        </Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="text-sm text-gray-500">
+                            <strong>To:</strong> {recipientInfo}
+                          </div>
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <p className="text-gray-700 whitespace-pre-wrap">{notification.content}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>

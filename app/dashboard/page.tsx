@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 "use client"
 
 import { useEffect, useState } from "react"
@@ -48,7 +40,7 @@ import type { Announcement, Group, User } from "@/types"
 import { Timestamp } from "firebase/firestore"
 import { Progress } from "@/components/ui/progress"
 import { useRouter } from "next/navigation"
-import { cn } from "@/lib/utils"
+import { cn, makeLinksClickable } from "@/lib/utils"
 
 // Simple linkify function to convert URLs in text to clickable links
 function linkify(text: string) {
@@ -655,7 +647,7 @@ return (
                       <CardContent className="space-y-6">
                         <div className="prose prose-sm max-w-none">
                           <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                              {linkify(announcement.content)}
+                            {makeLinksClickable(announcement.content)}
                           </p>
                         </div>
 
