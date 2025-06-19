@@ -22,9 +22,68 @@ import {
   Crown,
   Wifi,
   WifiOff,
+  Mail,
 } from "lucide-react"
 import { getPlatformSettings, savePlatformSettings } from "@/lib/firebase-utils"
 import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
+import { doc, getDoc, setDoc } from "firebase/firestore"
+
+function EmailVerificationToggle() {
+  const [enabled, setEnabled] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    getDoc(doc(db, "settings", "app")).then(docSnap => {
+      if (docSnap.exists()) {
+        setEnabled(!!docSnap.data().requireEmailVerification)
+      }
+      setLoading(false)
+    })
+  }, [])
+
+  const handleToggle = async (value: boolean) => {
+    setSaving(true)
+    try {
+      setEnabled(value)
+      await setDoc(doc(db, "settings", "app"), { requireEmailVerification: value }, { merge: true })
+    } catch (error) {
+      console.error("Error updating email verification setting:", error)
+      // Revert the toggle if save failed
+      setEnabled(!value)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <div>Loading email verification setting...</div>
+
+  return (
+    <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <Mail className="h-4 w-4 text-blue-600" />
+          <Label className="font-medium">Require Email Verification</Label>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {enabled 
+            ? "New users must verify their email address before accessing the platform"
+            : "New users can sign up and access the platform immediately without email verification"
+          }
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        {saving && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>}
+        <Switch 
+          checked={enabled} 
+          onCheckedChange={handleToggle}
+          disabled={saving}
+        />
+      </div>
+    </div>
+  )
+}
 
 export default function PlatformSettingsPage() {
   const { user } = useAuth()
@@ -263,6 +322,9 @@ export default function PlatformSettingsPage() {
               <CardDescription>Control how users can register and access the platform</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Email Verification Toggle */}
+              <EmailVerificationToggle />
+
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label>Allow Self Registration</Label>
@@ -273,20 +335,6 @@ export default function PlatformSettingsPage() {
                 <Switch
                   checked={settings.allowSelfRegistration}
                   onCheckedChange={(checked) => handleInputChange("allowSelfRegistration", checked)}
-                  disabled={user?.role !== "super_admin"}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Require Email Verification</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Users must verify their email before accessing the platform
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.requireEmailVerification}
-                  onCheckedChange={(checked) => handleInputChange("requireEmailVerification", checked)}
                   disabled={user?.role !== "super_admin"}
                 />
               </div>

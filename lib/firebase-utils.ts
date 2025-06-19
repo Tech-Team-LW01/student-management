@@ -1532,3 +1532,8 @@ export async function createUser(userData: {
     throw error
   }
 }
+
+export async function isEmailVerificationRequired() {
+  const docSnap = await getDoc(doc(db, "settings", "app"));
+  return !!docSnap.data()?.requireEmailVerification;
+}

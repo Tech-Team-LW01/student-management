@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "migrate-announcements": "ts-node scripts/migrate-announcements.ts"
+    "migrate-announcements": "ts-node scripts/migrate-announcements.ts",
+    "init-email-verification": "ts-node scripts/init-email-verification-setting.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

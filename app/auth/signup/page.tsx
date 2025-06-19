@@ -4,7 +4,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { getPlatformSettings } from "@/lib/firebase-utils"
+import { getPlatformSettings, isEmailVerificationRequired } from "@/lib/firebase-utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -49,6 +49,7 @@ export default function SignUpPage() {
   const [isResending, setIsResending] = useState(false)
   const [isSendingOTP, setIsSendingOTP] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
+  const [requireEmailVerification, setRequireEmailVerification] = useState(true);
 
   // Timer for OTP expiration
   useEffect(() => {
@@ -60,6 +61,10 @@ export default function SignUpPage() {
     }
     return () => clearInterval(interval)
   }, [showOTPVerification, otpTimer])
+
+  useEffect(() => {
+    isEmailVerificationRequired().then(setRequireEmailVerification);
+  }, []);
 
   // Format timer display
   const formatTime = (seconds: number) => {
@@ -210,18 +215,55 @@ export default function SignUpPage() {
       return
     }
 
-    // Send OTP
-    setIsSendingOTP(true)
-    try {
-      const sent = await sendOTP()
-      if (sent) {
-        setShowOTPVerification(true)
-        setOTPInputs(["", "", "", ""])
+    if (requireEmailVerification) {
+      // Send OTP
+      setIsSendingOTP(true)
+      try {
+        const sent = await sendOTP()
+        if (sent) {
+          setShowOTPVerification(true)
+          setOTPInputs(["", "", "", ""])
+        }
+      } catch (err) {
+        setError("Failed to send verification code. Please try again.")
+      } finally {
+        setIsSendingOTP(false)
       }
-    } catch (err) {
-      setError("Failed to send verification code. Please try again.")
-    } finally {
-      setIsSendingOTP(false)
+    } else {
+      // Skip OTP, create account directly
+      setIsSendingOTP(true)
+      try {
+        const userData = {
+          email: formData.email,
+          name: formData.name,
+          mobileNumber: formData.mobileNumber,
+          profileImage: formData.profileImage,
+          mode: formData.mode as "online" | "offline",
+          role: "student" as const,
+        }
+        
+        // Sign up the user directly (no OTP verification needed)
+        await signUp(userData, formData.password)
+        
+        // Check if auto-approval is enabled
+        const platformSettings = await getPlatformSettings()
+        const autoApproved = platformSettings.autoApproveStudents || false
+        
+        setIsAutoApproved(autoApproved)
+        setSuccess(true)
+        
+        // If auto-approved, redirect to dashboard
+        if (autoApproved) {
+          setRedirecting(true)
+          setTimeout(() => {
+            router.push("/dashboard")
+          }, 2000)
+        }
+      } catch (err: any) {
+        setError(err.message || "Failed to create account")
+      } finally {
+        setIsSendingOTP(false)
+      }
     }
   }
 
@@ -478,6 +520,13 @@ export default function SignUpPage() {
           </div>
           <CardTitle className="text-2xl">Join LinuxWorld</CardTitle>
           <CardDescription>Create your LinuxWorld classroom account</CardDescription>
+          {!requireEmailVerification && (
+            <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+              <p className="text-sm text-green-700">
+                Email verification is currently disabled. Your account will be created immediately.
+              </p>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -603,10 +652,10 @@ export default function SignUpPage() {
               {isSendingOTP ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending verification code...
+                  {requireEmailVerification ? "Sending verification code..." : "Creating account..."}
                 </>
               ) : (
-                "Continue"
+                requireEmailVerification ? "Continue" : "Create Account"
               )}
             </Button>
 
