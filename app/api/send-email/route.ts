@@ -18,7 +18,10 @@ const createGmailTransporter = () => {
 
 export async function POST(request: Request) {
   try {
+    console.log("send-email route called");
+    
     const { to, subject, html, text } = await request.json()
+    console.log("Received email request:", { to, subject });
 
     if (!to || !subject || (!html && !text)) {
       return NextResponse.json(
@@ -27,7 +30,22 @@ export async function POST(request: Request) {
       )
     }
 
+    // Check environment variables
+    if (!process.env.GMAIL_EMAIL || !process.env.GMAIL_APP_PASSWORD) {
+      console.error("Missing Gmail credentials:", {
+        hasEmail: !!process.env.GMAIL_EMAIL,
+        hasPassword: !!process.env.GMAIL_APP_PASSWORD
+      });
+      return NextResponse.json(
+        { error: "Email service not configured" },
+        { status: 500 }
+      )
+    }
+
+    console.log("Creating email transporter...");
     const transporter = createGmailTransporter()
+    
+    console.log("Sending email...");
     const info = await transporter.sendMail({
       from: process.env.EMAIL_FROM || `LinuxWorld <${process.env.GMAIL_EMAIL}>`,
       to,
@@ -36,11 +54,13 @@ export async function POST(request: Request) {
       text,
     })
 
+    console.log("Email sent successfully:", info.messageId);
     return NextResponse.json({ success: true, messageId: info.messageId })
-  } catch (error) {
-    console.error("Error sending email:", error)
+    
+  } catch (error: any) {
+    console.error("Error in send-email route:", error)
     return NextResponse.json(
-      { error: "Failed to send email" },
+      { error: "Failed to send email", details: error.message },
       { status: 500 }
     )
   }

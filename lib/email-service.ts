@@ -6,7 +6,12 @@ async function sendEmail(options: {
   html: string
   text: string
 }) {
-  const response = await fetch("/api/send-email", {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3001";
+  const emailUrl = `${baseUrl}/api/send-email`;
+  
+  console.log('Attempting to send email to:', emailUrl);
+  
+  const response = await fetch(emailUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -15,8 +20,17 @@ async function sendEmail(options: {
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.message || "Failed to send email")
+    // Log the response details for debugging
+    console.error(`Email API error: ${response.status} ${response.statusText}`);
+    const responseText = await response.text();
+    console.error('Response body:', responseText);
+    
+    try {
+      const error = JSON.parse(responseText);
+      throw new Error(error.message || error.error || "Failed to send email");
+    } catch (parseError) {
+      throw new Error(`Email API returned ${response.status}: ${responseText.substring(0, 100)}...`);
+    }
   }
 
   return response.json()
